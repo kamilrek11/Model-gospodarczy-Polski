@@ -38,6 +38,16 @@ def vat_revenue(
     elasticity: float,
     base_p: dict,
 ) -> np.ndarray:
+    """VAT revenue (mld zł) for each element of `consumption`.
+
+    Contract (second-round effects counted exactly once):
+    - `consumption` MUST be the pre-feedback path: nominal private consumption gross of VAT
+      at the baseline rates `base_p`, i.e. BEFORE any consumption_feedback adjustment.
+    - This function OWNS the demand (volume) response to VAT rate changes via
+      ((1 + t) / (1 + t_base)) ** elasticity per rate category.
+    - Do not pass consumption already scaled by (1 + consumption_feedback(...)) here
+      while `base_p` is still the baseline: that applies the volume response twice.
+    """
     cons = np.maximum(np.asarray(consumption, dtype=float), 0.0)
     gap = min(max(float(gap), 0.0), 1.0)
     total = np.zeros_like(cons)
@@ -58,5 +68,11 @@ def consumption_feedback(vat_before: float, vat_after: float, elasticity: float)
     """Relative change in real consumption after a move of the effective VAT rate.
 
     vat_before / vat_after are effective (average) VAT rates; full pass-through to prices.
+
+    Contract: this is for the macro block only, to propagate the VAT-driven consumption
+    change to OTHER variables (employment, wages, other tax bases). The adjusted
+    consumption must not be fed back into vat_revenue (with baseline base_p), because
+    vat_revenue already applies the same volume response; doing both double counts it.
+    For VAT itself, always pass the pre-feedback consumption path to vat_revenue.
     """
     return float(_price_volume(float(vat_before), float(vat_after), elasticity) - 1.0)

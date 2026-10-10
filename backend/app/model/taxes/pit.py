@@ -3,8 +3,13 @@
 Scale taxpayers (skala podatkowa): the income distribution (IncomeDist) is used only to
 get the effective average tax rate of the scale, which is then applied to the macro base
     scale_base_t = wage_bill_t + business_scale_share * business_income_t.
-Incomes of the distribution grow with scale_base_t relative to reference_base, so with
-fixed thresholds the effective rate rises with nominal growth (bracket creep).
+Incomes of the distribution are scaled by scale_base_t / reference_base, where
+reference_base is a FIXED data-year value (mld zł), by default the distribution total
+sum(taxpayers * incomes). The effective rate therefore reacts to the level of the base
+(a cut vs baseline lowers it) and, with fixed thresholds, rises with nominal growth
+(bracket creep). It never depends on other elements of the input array (other years/paths).
+If the distribution covers a wider income concept than scale_base (e.g. pensions), the
+caller should pass reference_base = baseline data-year scale base instead.
 
 Per-person scale tax (2022+ construction, "kwota zmniejszająca podatek" = low * tax_free):
     tax(y) = max(0, low * min(y, thr) + high * max(y - thr, 0) - low * tax_free)
@@ -26,12 +31,13 @@ from app.model import config
 @dataclass
 class IncomeDist:
     incomes: np.ndarray  # representative annual taxable income per group, zł
-    taxpayers: np.ndarray  # number of taxpayers per group (any consistent unit)
+    taxpayers: np.ndarray  # number of taxpayers per group, in millions
     business_scale_share: float = config.PIT_BUSINESS_SCALE_SHARE
     business_flat_share: float = config.PIT_BUSINESS_FLAT_SHARE
     business_lump_share: float = config.PIT_BUSINESS_LUMP_SHARE
     lump_revenue_to_income: float = config.PIT_LUMP_REVENUE_TO_INCOME
-    # scale base (mld zł) at which `incomes` were observed; None -> first simulated year
+    # scale base (mld zł) at which `incomes` were observed (fixed data year);
+    # None -> distribution total sum(taxpayers[mln] * incomes[zł]) / 1000
     reference_base: float | None = field(default=None)
 
     def __post_init__(self):
@@ -50,6 +56,10 @@ class IncomeDist:
             raise ValueError("Udziały form opodatkowania działalności muszą być nieujemne i sumować się do 1")
         if self.lump_revenue_to_income < 0:
             raise ValueError("lump_revenue_to_income musi być nieujemne")
+        if self.reference_base is None:
+            self.reference_base = float(np.sum(self.taxpayers * self.incomes)) / 1000.0
+        if not np.isfinite(self.reference_base) or self.reference_base < 0:
+            raise ValueError("reference_base musi być skończone i nieujemne")
 
 
 def default_income_dist() -> IncomeDist:
@@ -87,7 +97,7 @@ def pit_revenue(
     d = income_dist
 
     scale_base = wage + d.business_scale_share * bus
-    ref = d.reference_base if d.reference_base is not None else float(scale_base.flat[0])
+    ref = float(d.reference_base)
     growth = scale_base / ref if ref > 0 else np.ones_like(scale_base)
 
     eff = np.vectorize(lambda g: _effective_rate(d, float(g), p), otypes=[float])(growth)

@@ -75,6 +75,27 @@ def test_consumption_feedback():
     assert consumption_feedback(0.2, 0.3, 0.0) == pytest.approx(0.0)
 
 
+def test_vat_volume_response_equals_feedback_contract():
+    # Contract: vat_revenue owns the volume response. Its elasticity effect is exactly
+    # the consumption_feedback factor, so feeding feedback-adjusted consumption back
+    # into vat_revenue would apply the response twice.
+    base = defaults()
+    shares = {"standard": 1.0}
+    p = dict(base, vat_rate_standard=0.27)
+    e = -0.5
+    r_lin = vat_revenue(_cons(), shares, p, gap=0.0, elasticity=0.0, base_p=base)
+    r_el = vat_revenue(_cons(), shares, p, gap=0.0, elasticity=e, base_p=base)
+    fb = consumption_feedback(0.23, 0.27, e)
+    np.testing.assert_allclose(r_el, r_lin * (1 + fb))
+    double = vat_revenue(_cons() * (1 + fb), shares, p, gap=0.0, elasticity=e, base_p=base)
+    assert np.all(double < r_el)  # the double-counted path the docstring forbids
+
+
+def test_vat_docstrings_state_contract():
+    assert "pre-feedback" in vat_revenue.__doc__
+    assert "must not" in consumption_feedback.__doc__
+
+
 def test_effective_vat_rate_default():
     base = defaults()
     shares = {"standard": 0.5, "reduced1": 0.5}
@@ -152,6 +173,33 @@ def test_pit_bracket_creep_with_wage_growth():
     r = pit_revenue(wage, np.zeros(2), dist, p, calib=1.0)
     # doubling nominal incomes raises the effective rate (fixed thresholds)
     assert r[1] / wage[1] > r[0] / wage[0]
+
+
+def test_pit_level_shift_changes_effective_rate():
+    # a level cut in year 0 must lower the effective rate (no re-anchoring to year 0)
+    dist = default_income_dist()
+    p = defaults()
+    zero = np.zeros(1)
+    r_base = pit_revenue(np.array([900.0]), zero, dist, p, calib=1.0)
+    r_cut = pit_revenue(np.array([810.0]), zero, dist, p, calib=1.0)
+    assert r_cut[0] / 810.0 < r_base[0] / 900.0 - 1e-4
+
+
+def test_pit_anchor_independent_of_other_paths():
+    # result for a year must not depend on the first element of the array (path 0 draw)
+    dist = default_income_dist()
+    p = defaults()
+    a = pit_revenue(np.array([500.0, 900.0]), np.zeros(2), dist, p, calib=1.0)
+    b = pit_revenue(np.array([1500.0, 900.0]), np.zeros(2), dist, p, calib=1.0)
+    assert a[1] == pytest.approx(b[1])
+
+
+def test_income_dist_default_reference_base_is_distribution_total():
+    dist = default_income_dist()
+    rows = np.array(config.PIT_INCOME_DIST_DEFAULT)
+    # taxpayers in millions, incomes in zł -> mld zł
+    assert dist.reference_base == pytest.approx(float(np.sum(rows[:, 0] * rows[:, 1])) / 1000.0)
+    assert IncomeDist(incomes=np.array([1.0]), taxpayers=np.array([1.0]), reference_base=5.0).reference_base == 5.0
 
 
 def test_income_dist_validation():
