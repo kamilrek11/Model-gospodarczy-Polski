@@ -71,3 +71,33 @@ PIT_BUSINESS_LUMP_SHARE: float = 0.25
 # Ratio of recorded revenue (ryczałt base) to income for lump-sum taxpayers.
 # PLACEHOLDER-UNVERIFIED: illustrative value.
 PIT_LUMP_REVENUE_TO_INCOME: float = 2.0
+
+# Non-agricultural business income (PIT base outside wages) as a ratio to the wage bill.
+# No business-income series is loaded, so the projection ties it to the wage bill.
+# PLACEHOLDER-UNVERIFIED: illustrative ratio; should come from MF PIT statistics.
+PIT_BUSINESS_INCOME_TO_WAGE_BILL: float = 0.25
+
+# ---------------------------------------------------------------- second round (macro feedback)
+
+# Marginal propensity to consume out of disposable income: a PIT change of dT (mld zł)
+# moves nominal consumption by -HOUSEHOLD_MPC * dT.
+# PLACEHOLDER-UNVERIFIED: illustrative value, no literature source verified.
+HOUSEHOLD_MPC: float = 0.6
+
+# Share of private consumption in GDP: a relative change of real consumption x moves
+# real GDP by CONSUMPTION_GDP_SHARE * x (no import leakage or offsets modelled).
+# PLACEHOLDER-UNVERIFIED: order of magnitude only; should come from GUS national accounts.
+CONSUMPTION_GDP_SHARE: float = 0.57
+
+# Elasticity of employment w.r.t. real GDP (short-run, Okun-type).
+# PLACEHOLDER-UNVERIFIED: illustrative value, no literature source verified.
+EMPLOYMENT_GDP_ELASTICITY: float = 0.5
+
+# Conversion of the stored consumption_nominal series to mld zł (used only to scale the
+# PIT disposable-income channel; tax levels are calibrated and do not depend on it).
+# PLACEHOLDER-UNVERIFIED: the unit of the BDL series is not verified (see series_map).
+CONSUMPTION_SERIES_TO_MLD_ZL: float = 1.0
+
+# Number of most recent years used for the per-tax calibration factors (mean ratio of
+# recorded revenue to module output at current law). Method choice, not a data value.
+CALIBRATION_YEARS: int = 3

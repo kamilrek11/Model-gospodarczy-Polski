@@ -84,6 +84,20 @@ def _effective_rate(dist: IncomeDist, growth: float, p: dict) -> float:
     return float(np.sum(dist.taxpayers * scale_tax(y, p))) / total_income
 
 
+def effective_rates(dist: IncomeDist, growth: np.ndarray, p: dict) -> np.ndarray:
+    """Vectorised _effective_rate for an array of any shape (e.g. paths x years).
+
+    Same result as applying _effective_rate element-wise; each element depends only on
+    its own growth factor.
+    """
+    g = np.asarray(growth, dtype=float)
+    y = g[..., None] * dist.incomes  # (..., groups)
+    total_income = y @ dist.taxpayers
+    total_tax = scale_tax(y, p) @ dist.taxpayers
+    safe = np.where(total_income > 0.0, total_income, 1.0)
+    return np.where(total_income > 0.0, total_tax / safe, 0.0)
+
+
 def pit_revenue(
     wage_bill: np.ndarray,
     business_income: np.ndarray,
@@ -100,7 +114,7 @@ def pit_revenue(
     ref = float(d.reference_base)
     growth = scale_base / ref if ref > 0 else np.ones_like(scale_base)
 
-    eff = np.vectorize(lambda g: _effective_rate(d, float(g), p), otypes=[float])(growth)
+    eff = effective_rates(d, growth, p)
     flat = d.business_flat_share * bus * float(p["pit_flat_rate"])
     lump = d.business_lump_share * bus * d.lump_revenue_to_income * float(p["pit_lump_rate_default"])
     return max(float(calib), 0.0) * (eff * scale_base + flat + lump)

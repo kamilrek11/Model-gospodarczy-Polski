@@ -6,7 +6,7 @@ import pytest
 from app.model import config
 from app.model.params import defaults
 from app.model.taxes.cit import cit_revenue
-from app.model.taxes.pit import IncomeDist, default_income_dist, pit_revenue, scale_tax
+from app.model.taxes.pit import IncomeDist, _effective_rate, default_income_dist, effective_rates, pit_revenue, scale_tax
 from app.model.taxes.vat import consumption_feedback, effective_vat_rate, vat_revenue
 
 YEARS = 3
@@ -192,6 +192,24 @@ def test_pit_anchor_independent_of_other_paths():
     a = pit_revenue(np.array([500.0, 900.0]), np.zeros(2), dist, p, calib=1.0)
     b = pit_revenue(np.array([1500.0, 900.0]), np.zeros(2), dist, p, calib=1.0)
     assert a[1] == pytest.approx(b[1])
+
+
+def test_pit_vectorised_effective_rates_match_scalar():
+    dist = default_income_dist()
+    rng = np.random.default_rng(0)
+    growth = rng.uniform(0.0, 3.0, size=(40, 5))
+    growth[0, 0] = 0.0
+    for p in (defaults(), {**defaults(), "pit_threshold": 0.0}, {**defaults(), "pit_tax_free": 200_000.0, "pit_threshold": 50_000.0}):
+        vec = effective_rates(dist, growth, p)
+        scalar = np.array([[_effective_rate(dist, float(g), p) for g in row] for row in growth])
+        assert vec.shape == growth.shape
+        np.testing.assert_allclose(vec, scalar, rtol=1e-12, atol=1e-15)
+    # pit_revenue on a 2-D (paths, years) array equals element-wise 1-D calls
+    p = defaults()
+    wage, bus = 900.0 * growth, 300.0 * growth
+    full = pit_revenue(wage, bus, dist, p, calib=1.3)
+    rows = np.array([pit_revenue(w, b, dist, p, calib=1.3) for w, b in zip(wage, bus)])
+    np.testing.assert_allclose(full, rows, rtol=1e-12)
 
 
 def test_income_dist_default_reference_base_is_distribution_total():
