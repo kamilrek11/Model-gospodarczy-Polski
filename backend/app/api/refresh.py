@@ -59,8 +59,9 @@ def refresh(store: Store, clients: list[SourceClient], lags: int = 1) -> Refresh
         return RefreshResult(False, {MODEL_SOURCE: f"estimation failed: {e}"}, store.get_meta("updated_at"))
 
     updated_at = datetime.now(UTC).isoformat()
-    # one transaction: a failure mid-write rolls back and the last good state stays intact
-    store.save_snapshot(fetched, model.to_dict(), {"updated_at": updated_at})
+    # one transaction: a failure mid-write rolls back and the last good state stays intact.
+    # Real source data replaces any seeded data, so the synthetic marker is cleared in the same snapshot.
+    store.save_snapshot(fetched, model.to_dict(), {"updated_at": updated_at, "synthetic": "0"})
     return RefreshResult(True, {}, updated_at)
 
 
@@ -128,4 +129,9 @@ def start_refresh(
 
 @router.get("/status")
 def refresh_status(store: Store = Depends(get_store), job: RefreshJob = Depends(get_job)) -> dict:
-    return {"state": job.state, "errors": dict(job.errors), "updated_at": store.get_meta("updated_at")}
+    return {
+        "state": job.state,
+        "errors": dict(job.errors),
+        "updated_at": store.get_meta("updated_at"),
+        "synthetic": store.is_synthetic(),
+    }

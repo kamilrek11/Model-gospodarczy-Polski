@@ -57,4 +57,5 @@ def post_simulate(req: SimulateRequest, store: Store = Depends(get_store)) -> di
         **res.to_dict(),
         "model_version": model_version(stored),
         "data_updated_at": store.get_meta("updated_at"),
+        "synthetic": store.is_synthetic(),
     }

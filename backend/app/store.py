@@ -69,6 +69,10 @@ class Store:
         with self._conn() as c:
             self._write_meta(c, key, value)
 
+    def is_synthetic(self) -> bool:
+        """True when the stored data was seeded with invented numbers (meta synthetic == "1")."""
+        return self.get_meta("synthetic") == "1"
+
     def get_meta(self, key: str) -> str | None:
         with self._conn() as c:
             row = c.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()

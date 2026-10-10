@@ -91,7 +91,8 @@ def test_history_returns_revenues(client):
     c, store = client
     hist, _ = fill(store)
     body = c.get("/history").json()
-    assert set(body) == {"pit", "cit", "vat"}
+    assert set(body) == {"pit", "cit", "vat", "synthetic"}
+    assert body["synthetic"] is False
     assert len(body["pit"]) == 20
     assert body["vat"][0]["year"] == 2000
     assert body["vat"][0]["value"] == pytest.approx(hist["rev_vat"]["value"].iloc[0])

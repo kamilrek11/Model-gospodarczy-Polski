@@ -1,4 +1,4 @@
-"""GET /history: recorded PIT/CIT/VAT revenue series (mld zł)."""
+"""GET /history: recorded PIT/CIT/VAT revenue series (mld zł) plus the `synthetic` data marker."""
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -19,4 +19,4 @@ def get_history(store: Store = Depends(get_store)) -> dict:
             out[tax] = [{"year": int(y), "value": float(v)} for y, v in df["value"].items()]
     if not out:
         raise HTTPException(status_code=409, detail=NO_DATA)
-    return out
+    return {**out, "synthetic": store.is_synthetic()}

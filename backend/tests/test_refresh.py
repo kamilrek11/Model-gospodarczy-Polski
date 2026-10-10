@@ -117,7 +117,7 @@ def api(tmp_path):
 
 def test_refresh_status_initially_idle(api):
     client, _, _ = api
-    assert client.get("/refresh/status").json() == {"state": "idle", "errors": {}, "updated_at": None}
+    assert client.get("/refresh/status").json() == {"state": "idle", "errors": {}, "updated_at": None, "synthetic": False}
 
 
 def test_refresh_endpoint_runs_job_and_reports_done(api):
