@@ -36,6 +36,8 @@ Calibration
     Per tax, factor = mean over the last CALIBRATION_YEARS years (with both the base series
     and rev_<tax> recorded) of rev_<tax> / module output at current law. vat_revenue has no
     calib argument, so its factor multiplies the output; PIT and CIT take it as `calib`.
+    Years at or after a structural break of rev_<tax> (config.STRUCTURAL_BREAKS, e.g. the 2025
+    state-budget PIT share) are never used (calibration_years).
     Note: historical years are evaluated at CURRENT law, not the law in force then.
 
 A module whose required series is missing (or not usable) is disabled with a message;
@@ -75,6 +77,18 @@ STRUCTURAL_ASSUMPTIONS: tuple[tuple[str, str], ...] = (
     ("structure.gross_surplus_projection", "Nadwyżka operacyjna brutto rośnie jak realny PKB x CPI od ostatniego roku danych."),
     ("structure.calibration_current_law", "Kalibracja liczy lata historyczne przy obecnym prawie (domyślne parametry), nie przy prawie obowiązującym w danym roku."),
 )
+
+# Polish notes for the structural breaks declared in config.STRUCTURAL_BREAKS (also used by the backtest)
+BREAK_NOTES: dict[str, str] = {
+    "rev_pit": "PIT w budżecie państwa: zmiana zasad podziału od 2025 r. (reforma finansowania JST); kalibracja do 2024; "
+    "wykonanie 2025 nie jest porównywalne z prognozą przy dotychczasowych zasadach.",
+}
+
+
+def calibration_years(series_name: str, years) -> list[int]:
+    """Years usable for calibration of `series_name`: those before its structural break (if any)."""
+    brk = config.STRUCTURAL_BREAKS.get(series_name)
+    return [int(y) for y in years if brk is None or int(y) < brk]
 
 
 @dataclass
@@ -192,6 +206,7 @@ def _prepare(model: MacroModel, history: dict[str, pd.DataFrame]) -> tuple[_Cont
             disabled.append({"module": tax, "message": f"Moduł {tax.upper()} wyłączony: brak serii {', '.join(missing)} w danych."})
             continue
         rev = _series(history, f"rev_{tax}").rename("rev")
+        rev = rev[rev.index.isin(calibration_years(f"rev_{tax}", rev.index))]
         if tax == "pit":
             w = _calib_window(rev, _series(history, "wage_nominal").rename("w"), _series(history, "employment").rename("e"))
             module = _pit(w["w"].to_numpy() * w["e"].to_numpy(), dist, law, 1.0) if len(w) else np.array([])
@@ -217,7 +232,8 @@ def _prepare(model: MacroModel, history: dict[str, pd.DataFrame]) -> tuple[_Cont
         calibration[tax] = {
             "factor": factor,
             "years": [int(y) for y in w.index],
-            "method": f"średnia relacja wykonania rev_{tax} do wyniku modułu przy obecnym prawie z ostatnich {config.CALIBRATION_YEARS} lat",
+            "method": f"średnia relacja wykonania rev_{tax} do wyniku modułu przy obecnym prawie z ostatnich {config.CALIBRATION_YEARS} lat"
+            + (f" przed załamaniem strukturalnym w {brk} r." if (brk := config.STRUCTURAL_BREAKS.get(f"rev_{tax}")) else ""),
         }
 
     ctx = _Context(
@@ -260,7 +276,7 @@ def _scenario(lv: dict[str, np.ndarray], p: dict, law: dict, ctx: _Context, pit_
     f_pit = 0.0
     if pit_first_law is not None:
         d_pit = _pit(wage * emp, ctx.dist, p, ctx.calib["pit"]) - pit_first_law
-        f_pit = -config.HOUSEHOLD_MPC * d_pit / (cons * config.CONSUMPTION_SERIES_TO_MLD_ZL)
+        f_pit = -config.HOUSEHOLD_MPC * d_pit / cons  # both in mld zł (units enforced by the dataset gates)
     pit_factor = np.maximum(1.0 + f_pit, 0.0)
 
     # 2. VAT on consumption at baseline prices moved only by the PIT channel (owns its volume response)
@@ -332,6 +348,10 @@ def simulate(
 
     assumptions = placeholder_assumptions()
     assumptions += [{"key": k, "value": None, "status": "model-structure", "note": n} for k, n in STRUCTURAL_ASSUMPTIONS]
+    assumptions += [
+        {"key": f"structure.break.{name}", "value": year, "status": "model-structure", "note": BREAK_NOTES.get(name, f"Załamanie strukturalne serii {name} od {year} r.")}
+        for name, year in config.STRUCTURAL_BREAKS.items()
+    ]
     assumptions += [
         {"key": f"calibration.{t}", "value": c["factor"], "status": "calibrated", "note": c["method"] + f" ({c['years'][0]}-{c['years'][-1]})"}
         for t, c in calibration.items()

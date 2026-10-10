@@ -3,6 +3,7 @@ services:
     build: ./backend
     environment:
       BUDGET_DB_PATH: /data/budget.db
+      BUDGET_CACHE_DIR: /data/cache
     volumes:
       - budget-data:/data
     healthcheck:

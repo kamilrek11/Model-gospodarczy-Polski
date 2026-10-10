@@ -27,14 +27,23 @@ async function read(download: import("@playwright/test").Download): Promise<Buff
 test.describe("empty store", () => {
   test.use({ baseURL: EMPTY });
 
-  test("shows EmptyState with refresh button; refresh against unmapped sources fails clearly", async ({ page }) => {
+  // Both e2e backends run with REFRESH_DISABLED=1 (scripts/start_backend.sh): no real network from e2e.
+  test("shows EmptyState; refresh is disabled in this instance with a Polish message", async ({ page, request }) => {
     await page.goto("/");
     await expect(page.getByText("DANE SYNTETYCZNE – nie są to dane GUS/MF")).toHaveCount(0);
     const empty = page.locator(".empty-state");
     await expect(empty).toContainText("Brak danych źródłowych");
-    await empty.getByRole("button", { name: "Odśwież dane" }).click();
-    await expect(empty.getByRole("alert")).toContainText("Odświeżenie nie powiodło się");
-    await expect(empty).toContainText("Brak danych źródłowych");
+    await expect(empty.getByRole("alert")).toContainText("Odświeżanie wyłączone w tej instancji");
+    await expect(empty.getByRole("button", { name: "Odśwież dane" })).toBeDisabled();
+    await expect(empty).not.toContainText("Odświeżenie nie powiodło się");
+
+    // the API itself refuses to start a job
+    const post = await request.post("/api/refresh");
+    expect(post.status()).toBe(403);
+    expect(await post.json()).toEqual({ detail: "odświeżanie wyłączone w tej instancji" });
+    const status = await (await request.get("/api/refresh/status")).json();
+    expect(status.disabled).toBe(true);
+    expect(status.state).toBe("idle");
   });
 });
 

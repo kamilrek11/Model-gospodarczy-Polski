@@ -30,6 +30,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError("network", "Brak połączenia z serwerem");
   }
   if (res.ok) return (await res.json()) as T;
+  if (res.status === 403) throw new ApiError("disabled", await detailOf(res, "odświeżanie wyłączone w tej instancji"));
   if (res.status === 409) throw new ApiError("no-data", await detailOf(res, "brak danych – uruchom odświeżenie"));
   if (res.status === 422) throw new ApiError("invalid", await detailOf(res, "Nieprawidłowe parametry"));
   throw new ApiError("server", await detailOf(res, `Błąd serwera (${res.status})`));

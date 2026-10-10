@@ -1,5 +1,5 @@
 import type { RefreshStatus } from "../api/types";
-import { RefreshButton } from "./RefreshButton";
+import { MSG_REFRESH_DISABLED, RefreshButton } from "./RefreshButton";
 
 export function EmptyState({ status, onRefresh }: { status: RefreshStatus | null; onRefresh: () => void }) {
   return (
@@ -11,7 +11,8 @@ export function EmptyState({ status, onRefresh }: { status: RefreshStatus | null
       </p>
       <RefreshButton status={status} onRefresh={onRefresh} />
       {status?.state === "running" && <p role="status">Trwa pobieranie danych…</p>}
-      {status?.state === "failed" && (
+      {status?.disabled && <p role="alert">{MSG_REFRESH_DISABLED}</p>}
+      {status?.state === "failed" && !status.disabled && (
         <p role="alert">
           Odświeżenie nie powiodło się{Object.keys(status.errors).length > 0 ? `: ${Object.keys(status.errors).join(", ")}` : ""}. Spróbuj ponownie.
         </p>

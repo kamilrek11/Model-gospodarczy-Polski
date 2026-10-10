@@ -43,9 +43,12 @@ def test_endpoints_expose_synthetic_flag(tmp_path, client_for, marker, expected)
     assert c.get("/refresh/status").json()["synthetic"] is expected
 
 
-def test_refresh_status_on_empty_store_is_not_synthetic(tmp_path, client_for):
+def test_refresh_status_on_empty_store_is_not_synthetic(tmp_path, client_for, monkeypatch):
+    monkeypatch.delenv("REFRESH_DISABLED", raising=False)
     c = client_for(Store(str(tmp_path / "t.db")))
-    assert c.get("/refresh/status").json() == {"state": "idle", "errors": {}, "updated_at": None, "synthetic": False}
+    assert c.get("/refresh/status").json() == {
+        "state": "idle", "errors": {}, "warnings": [], "updated_at": None, "synthetic": False, "disabled": False,
+    }
 
 
 def test_successful_refresh_clears_synthetic_flag(tmp_path):

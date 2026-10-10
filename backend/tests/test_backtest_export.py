@@ -204,3 +204,33 @@ def test_export_csv_guards_all_formula_prefixes(client, prefix):
     hist, model = fill(store)
     r = c.post("/export?format=csv", json={"params": {}, "result": sim_result(hist, model), "name": prefix + "cmd"})
     assert ("'" + prefix + "cmd") in r.content.decode("utf-8-sig")
+
+
+def test_backtest_skips_pit_targets_from_break_year_and_notes_it():
+    from app.data.dataset import assemble
+    from app.model.backtest import NOTE_PIT_BREAK
+    from tests.real_dataset import real_results
+
+    data = {k: df for k, (_, df) in assemble(real_results()).items()}
+    assert data["rev_pit"].index.max() == 2025
+    res = backtest(data, horizon=2, min_train=12)
+    assert "pit" in res.mape and res.message is None
+    assert NOTE_PIT_BREAK in res.notes
+    assert NOTE_PIT_BREAK.startswith("PIT w budżecie państwa: zmiana zasad podziału od 2025 r.")
+
+    # PIT 2025 is never scored: any value there gives exactly the same PIT metrics as no value at all
+    without = dict(data)
+    without["rev_pit"] = data["rev_pit"].loc[:2024]
+    ref = backtest(without, horizon=2, min_train=12)
+    assert NOTE_PIT_BREAK not in ref.notes  # nothing skipped -> no note
+    for v in (1e-3, 1e4):
+        odd = dict(data)
+        pit = data["rev_pit"].copy()
+        pit.loc[2025, "value"] = v
+        odd["rev_pit"] = pit
+        r = backtest(odd, horizon=2, min_train=12)
+        assert (r.mape["pit"], r.coverage80["pit"], r.coverage95["pit"]) == (ref.mape["pit"], ref.coverage80["pit"], ref.coverage95["pit"])
+    # other taxes keep their 2025 targets
+    vat_without = dict(data)
+    vat_without["rev_vat"] = data["rev_vat"].loc[:2024]
+    assert backtest(vat_without, horizon=2, min_train=12).mape["vat"] != res.mape["vat"]

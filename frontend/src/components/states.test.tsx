@@ -34,6 +34,36 @@ describe("StatusBanner", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("09.10.2026");
   });
 
+  it("lists source warnings of the last refresh without an error", () => {
+    render(
+      <StatusBanner
+        error={null}
+        status={{ state: "done", errors: {}, warnings: ["mf_execution: 2015: legacy .xls report is not supported"], updated_at: "2026-10-09T12:00:00Z" }}
+        updatedAt="2026-10-09T12:00:00Z"
+        onRefresh={vi.fn()}
+      />,
+    );
+    const note = screen.getByRole("status");
+    expect(note).toHaveTextContent("Uwagi do danych");
+    expect(note).toHaveTextContent("mf_execution: 2015: legacy .xls report is not supported");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("refresh disabled in this instance: Polish notice instead of a generic error", () => {
+    render(
+      <StatusBanner
+        error={null}
+        status={{ state: "failed", errors: { refresh: "odświeżanie wyłączone w tej instancji" }, updated_at: null, disabled: true }}
+        updatedAt={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Odświeżanie wyłączone w tej instancji");
+    expect(alert).not.toHaveTextContent("Nie udało się odświeżyć danych");
+    expect(screen.getByRole("button", { name: "Odśwież dane" })).toBeDisabled();
+  });
+
   it("renders nothing when all is well", () => {
     const { container } = render(<StatusBanner error={null} status={{ state: "idle", errors: {}, updated_at: null }} updatedAt={null} onRefresh={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
@@ -47,6 +77,22 @@ describe("EmptyState", () => {
     expect(screen.getByText(/Brak danych źródłowych/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Odśwież dane" }));
     expect(onRefresh).toHaveBeenCalled();
+  });
+});
+
+describe("EmptyState with refresh disabled", () => {
+  it("shows the Polish disabled message and a disabled button", () => {
+    const onRefresh = vi.fn();
+    render(<EmptyState status={{ state: "idle", errors: {}, updated_at: null, disabled: true }} onRefresh={onRefresh} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Odświeżanie wyłączone w tej instancji");
+    expect(screen.getByRole("button", { name: "Odśwież dane" })).toBeDisabled();
+    expect(screen.queryByText(/Odświeżenie nie powiodło się/)).toBeNull();
+  });
+
+  it("after a 403 (status failed + disabled) still shows the disabled message, not a generic failure", () => {
+    render(<EmptyState status={{ state: "failed", errors: { refresh: "odświeżanie wyłączone w tej instancji" }, updated_at: null, disabled: true }} onRefresh={vi.fn()} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Odświeżanie wyłączone w tej instancji");
+    expect(screen.queryByText(/Odświeżenie nie powiodło się/)).toBeNull();
   });
 });
 

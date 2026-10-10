@@ -32,6 +32,14 @@ cd frontend && npm ci && npm run dev
 
 Testy: `cd backend && .venv/bin/python -m pytest`, `cd frontend && npx vitest run && npx tsc --noEmit`.
 
+Zmienne środowiskowe backendu związane z odświeżaniem danych (`POST /refresh`):
+
+- `BUDGET_CACHE_DIR` – katalog cache sprawozdań MF (wartości per rok, bez archiwów ZIP); domyślnie `<katalog bazy>/cache`,
+  pusta wartość wyłącza cache (każde odświeżenie pobiera wtedy ok. 210 MB). W Docker Compose: `/data/cache` w wolumenie.
+- `BDL_CLIENT_ID` – opcjonalny klucz API GUS BDL (wyższy limit zapytań).
+- `REFRESH_DISABLED=1` – wyłącza odświeżanie (`POST /refresh` → 403 „odświeżanie wyłączone w tej instancji”,
+  `/refresh/status` zwraca `disabled: true`); używane przez testy e2e, które nie łączą się z prawdziwymi źródłami.
+
 ### Dane syntetyczne (fixtures) - OSTRZEŻENIE
 
 Prawdziwe źródła danych nie są jeszcze podłączone (patrz niżej), więc do uruchomienia aplikacji offline i do testów e2e służy:
@@ -55,7 +63,8 @@ PDF: notka). Udane odświeżenie z prawdziwych źródeł zapisuje `meta.syntheti
 cd e2e && npm ci && npm test      # buduje frontend, startuje 2 backendy (zasiane / puste) i 2 serwery podglądu
 ```
 
-Testy uruchamiają backend na tymczasowej bazie z danymi syntetycznymi oraz drugi, z pustą bazą (stan pusty). Jeśli przeglądarka
+Testy uruchamiają backend na tymczasowej bazie z danymi syntetycznymi oraz drugi, z pustą bazą (stan pusty); oba z
+`REFRESH_DISABLED=1` (bez ruchu sieciowego do źródeł danych). Jeśli przeglądarka
 Playwrighta nie jest pobrana, wskaż Chromium: `PW_CHROMIUM_PATH=/ścieżka/do/chrome npm test`.
 
 ## Znane ograniczenia i otwarte kwestie
