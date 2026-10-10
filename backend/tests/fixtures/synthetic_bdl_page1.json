@@ -1,0 +1,7 @@
+{"_note": "SYNTHETIC, hand-built to mimic BDL shape; NOT real data",
+ "totalRecords": 3, "page": 0, "pageSize": 2,
+ "links": {"next": "https://bdl.test/api/v1/data/by-variable/9001?format=json&lang=pl&page-size=2&page=1"},
+ "results": [
+  {"id": "000000000000", "name": "Polska", "values": [{"year": "2020", "val": 100.0, "attrId": 1}, {"year": "2021", "val": 110.0, "attrId": 1}]},
+  {"id": "020000000000", "name": "DOLNOŚLĄSKIE", "values": [{"year": "2020", "val": 9.0, "attrId": 1}]}
+ ]}
