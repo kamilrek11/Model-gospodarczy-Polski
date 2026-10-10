@@ -270,8 +270,16 @@ def test_refresh_disabled_returns_403_and_status_flag(api, monkeypatch):
     assert Store(store_path).load_model() is None
 
 
-@pytest.mark.parametrize("value", ["", "0"])
-def test_refresh_enabled_unless_flag_is_one(api, monkeypatch, value):
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", " Yes "])
+def test_refresh_disabled_accepts_true_and_yes(api, monkeypatch, value):
+    client, _, _ = api
+    monkeypatch.setenv("REFRESH_DISABLED", value)
+    assert client.get("/refresh/status").json()["disabled"] is True
+    assert client.post("/refresh").status_code == 403
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no"])
+def test_refresh_enabled_unless_flag_is_set(api, monkeypatch, value):
     client, _, _ = api
     monkeypatch.setenv("REFRESH_DISABLED", value)
     assert client.get("/refresh/status").json()["disabled"] is False

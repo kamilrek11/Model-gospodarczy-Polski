@@ -8,7 +8,7 @@ unsupported MF 2015 report) do not fail the refresh; they are reported in /refre
 series that end before the last stored year are rejected (gate (f)), so revenues are never shortened.
 
 Environment: BDL_CLIENT_ID (optional BDL key), BUDGET_CACHE_DIR (MF cache; empty = off; default
-<db dir>/cache), REFRESH_DISABLED=1 (POST /refresh answers 403, e.g. demo/test instances).
+<db dir>/cache), REFRESH_DISABLED=1/true/yes (case-insensitive; POST /refresh answers 403, e.g. demo/test or exposed instances).
 """
 
 import os
@@ -187,7 +187,7 @@ def cache_dir() -> str | None:
 
 
 def refresh_disabled() -> bool:
-    return os.environ.get(DISABLED_ENV, "").strip() == "1"
+    return os.environ.get(DISABLED_ENV, "").strip().lower() in ("1", "true", "yes")
 
 
 def get_clients() -> ClientBundle:

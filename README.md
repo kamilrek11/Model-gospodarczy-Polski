@@ -14,6 +14,16 @@ docker compose up -d --build     # frontend: http://localhost:8080 (jedyny opubl
 Backend nie jest wystawiony na zewnątrz; nginx we frontendzie proxuje `/api/*` do `backend:8000` (bez prefiksu `/api`).
 Baza SQLite leży w nazwanym wolumenie `budget-data` (`/data/budget.db`). Healthcheck backendu: `GET /health`.
 
+> **Uwaga – `POST /api/refresh` działa bez uwierzytelniania**, a nginx wystawia go razem z resztą `/api` na porcie 8080.
+> Każdy, kto ma dostęp do frontendu, może wielokrotnie uruchamiać odświeżanie (zapytania do BDL – limit anonimowy
+> 1000 / 12 h – i do ok. 210 MB pobrań z dane.gov.pl przy pustym cache). Ostatni dobry stan danych jest chroniony, ale dla
+> każdej instancji dostępnej spoza zaufanej sieci ustaw `REFRESH_DISABLED=1` (Compose przekazuje zmienną do backendu,
+> domyślnie `0` = odświeżanie włączone):
+>
+> ```bash
+> REFRESH_DISABLED=1 docker compose up -d --build
+> ```
+
 > Stan weryfikacji: w środowisku, w którym powstał kod, nie działał demon Dockera, więc lokalnie sprawdzono tylko
 > `docker compose config`. Build obrazów, `docker compose up --wait`, `nginx -t` i test dymny (SPA oraz proxy `/api`)
 > uruchamia i przechodzi workflow CI (zadanie „Docker" w `.github/workflows/ci.yml`) na runnerze GitHub Actions.
@@ -89,8 +99,9 @@ Zmienne środowiskowe backendu:
   jedno odświeżenie to 6 zapytań do BDL).
 - `BUDGET_CACHE_DIR` – katalog cache sprawozdań MF (tylko odczytane wartości per rok jako JSON, bez archiwów ZIP); domyślnie
   `<katalog bazy>/cache`, pusta wartość wyłącza cache. W Docker Compose: `/data/cache` w wolumenie.
-- `REFRESH_DISABLED=1` – wyłącza odświeżanie (`POST /refresh` → 403 „odświeżanie wyłączone w tej instancji”,
-  `/refresh/status` zwraca `disabled: true`); używane przez testy e2e, które nie łączą się z prawdziwymi źródłami.
+- `REFRESH_DISABLED=1` (także `true`/`yes`, bez względu na wielkość liter) – wyłącza odświeżanie (`POST /refresh` → 403
+  „odświeżanie wyłączone w tej instancji”, `/refresh/status` zwraca `disabled: true`); używane przez testy e2e, które nie
+  łączą się z prawdziwymi źródłami, i zalecane dla każdej wystawionej instancji (endpoint nie ma uwierzytelniania).
 
 **Pierwsze odświeżenie pobiera ok. 210 MB** (10 rocznych archiwów ZIP MF 2016–2025, w większości PDF-y dołączone przez MF;
 trwało ok. 6,5 min) – kolejne korzystają z cache i robią tylko 8 zapytań do BDL/Eurostatu plus listę zasobów dane.gov.pl.
