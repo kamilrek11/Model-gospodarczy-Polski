@@ -1,12 +1,66 @@
 import { useEffect, useState } from "react";
 import { ApiError, getBacktest } from "../api/client";
-import type { BacktestResult, SimulationResult, TaxKey } from "../api/types";
+import type { AssumptionValue, BacktestResult, SimulationResult, TaxKey } from "../api/types";
 import { TAX_LABEL, TAX_ORDER } from "../charts/palette";
 
 const pctFmt = new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const numFmt = new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 });
 
 export const isPlaceholder = (status: string): boolean => status.includes("PLACEHOLDER");
+
+const fmtValue = (v: unknown): string => (typeof v === "number" && Number.isFinite(v) ? numFmt.format(v) : "–");
+
+/** Polska odmiana liczebnika: 1 grupa, 2-4 grupy, 5+ grup. */
+function plural(n: number, one: string, few: string, many: string): string {
+  if (n === 1) return one;
+  const d = n % 10;
+  const t = n % 100;
+  return d >= 2 && d <= 4 && (t < 12 || t > 14) ? few : many;
+}
+
+/** Wartość założenia: liczba, słownik (klucz: wartość) albo macierz (podsumowanie + tabela w <details>). */
+export function AssumptionValueView({ value, label }: { value: AssumptionValue; label: string }) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return <> = {fmtValue(value)}</>;
+  if (Array.isArray(value)) {
+    const cols = Math.max(0, ...value.map((r) => (Array.isArray(r) ? r.length : 0)));
+    return (
+      <>
+        {" "}
+        = {value.length} {plural(value.length, "grupa", "grupy", "grup")} × {cols} {plural(cols, "kolumna", "kolumny", "kolumn")}
+        <details className="assumption-data">
+          <summary>Pokaż dane</summary>
+          <div className="table-scroll">
+            <table className="data-table">
+              <caption>{label}</caption>
+              <tbody>
+                {value.map((row, i) => (
+                  <tr key={i}>
+                    {(Array.isArray(row) ? row : [row]).map((c, j) => (
+                      <td key={j}>{fmtValue(c)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </>
+    );
+  }
+  if (typeof value === "object") {
+    return (
+      <ul className="kv-list">
+        {Object.entries(value).map(([k, v]) => (
+          <li key={k}>
+            {k}: {fmtValue(v)}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return <> = {String(value)}</>;
+}
 
 export function QualityTab({ sim, refreshKey = 0 }: { sim: SimulationResult | null; refreshKey?: number }) {
   const [bt, setBt] = useState<BacktestResult | null>(null);
@@ -94,7 +148,7 @@ export function QualityTab({ sim, refreshKey = 0 }: { sim: SimulationResult | nu
               {sim.assumptions.map((a) => (
                 <li key={a.key} className={isPlaceholder(a.status) ? "assumption placeholder" : "assumption"}>
                   <code>{a.key}</code>
-                  {a.value !== null && <> = {numFmt.format(a.value)}</>}{" "}
+                  <AssumptionValueView value={a.value} label={a.key} />{" "}
                   <span className={isPlaceholder(a.status) ? "badge badge-warn" : "badge"}>{a.status}</span>
                   <small>{a.note}</small>
                 </li>

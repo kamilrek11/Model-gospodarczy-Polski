@@ -156,3 +156,6 @@ button.primary:disabled { opacity: 0.6; cursor: progress; }
 .badge { font-size: 0.75rem; padding: 0.1rem 0.4rem; border: 1px solid var(--grid); border-radius: 4px; margin-left: 0.25rem; }
 .badge-warn { border-color: var(--warn-border); font-weight: 700; }
 .note-list { font-size: 0.85rem; color: var(--text-secondary); padding-left: 1.25rem; }
+.kv-list { list-style: none; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; padding: 0; margin: 0.25rem 0; font-variant-numeric: tabular-nums; }
+.assumption-data { margin: 0.25rem 0; }
+.assumption-data summary { cursor: pointer; }

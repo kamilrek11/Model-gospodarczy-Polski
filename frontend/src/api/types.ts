@@ -37,9 +37,12 @@ export interface CalibrationInfo {
   method: string;
 }
 
+/** Wartość stałej modelu: liczba, słownik (np. VAT_CONSUMPTION_SHARES) lub macierz (np. PIT_INCOME_DIST_DEFAULT). */
+export type AssumptionValue = number | number[][] | Record<string, number> | null;
+
 export interface Assumption {
   key: string;
-  value: number | null;
+  value: AssumptionValue;
   status: string;
   note: string;
 }
