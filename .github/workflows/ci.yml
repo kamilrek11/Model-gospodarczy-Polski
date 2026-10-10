@@ -34,11 +34,11 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install $(.venv/bin/python -c "import tomllib;p=tomllib.load(open('pyproject.toml','rb'))['project'];print(' '.join(p['dependencies']+p['optional-dependencies']['dev']))")
-      - name: pytest (ResourceWarnings are errors via pyproject; live tests skipped via addopts)
+      - name: pytest (ResourceWarnings are errors via pyproject; live tests skipped without RUN_LIVE=1)
         run: .venv/bin/python -m pytest -q
 
   live-sources:
-    name: Live data sources (pytest -m live)
+    name: Live data sources (RUN_LIVE=1 pytest -m live)
     # contacts GUS BDL, Eurostat and dane.gov.pl (~7 MB): manual runs only, never on PRs or pushes
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -60,7 +60,8 @@ jobs:
       - name: pytest -m live (real sources)
         env:
           BDL_CLIENT_ID: ${{ secrets.BDL_CLIENT_ID }}
-        run: .venv/bin/python -m pytest -m live -q
+          RUN_LIVE: "1"
+        run: .venv/bin/python -m pytest -m live -q -rs
 
   frontend:
     name: Frontend (vitest, tsc, build)

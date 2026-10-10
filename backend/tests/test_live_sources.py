@@ -1,6 +1,6 @@
-"""Live smoke tests against the REAL public sources (network). Skipped by default.
+"""Live smoke tests against the REAL public sources (network). Skipped unless RUN_LIVE=1 (tests/conftest.py).
 
-Run explicitly:  cd backend && .venv/bin/python -m pytest -m live -q
+Run explicitly:  cd backend && RUN_LIVE=1 .venv/bin/python -m pytest -m live -q
 
 Each test makes only small requests through the production client classes:
 - GUS BDL: one request (nominal GDP, variable 458271, national unit only);

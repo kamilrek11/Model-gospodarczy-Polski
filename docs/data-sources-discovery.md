@@ -128,7 +128,7 @@ horyzont 5) i `backtest` (horyzont 3).
 - Wynik: **kod wyjścia 0, odświeżenie udane, wszystkie bramki jakości przeszły**, zapis z `synthetic="0"`.
 - Zgodność z nagraniami: wszystkie wartości na żywo są identyczne z nagranymi fixtures (BDL, Eurostat) i z macierzą MF
   powyżej (2016–2025, co do grosza w tys. zł) – testy offline działają na danych reprezentatywnych.
-- Testy `pytest -m live` (3 testy: BDL 458271 2024, Eurostat P31_S14 2024, MF VAT 2024 jednego roku) – zielone.
+- Testy `pytest -m live` (dziś: `RUN_LIVE=1 pytest -m live`; 3 testy: BDL 458271 2024, Eurostat P31_S14 2024, MF VAT 2024 jednego roku) – zielone.
 
 Raport (dosłownie, wyjście skryptu):
 

@@ -116,13 +116,14 @@ cd backend
 # raport: prawdziwe odświeżenie do NOWEJ bazy, symulacja z parametrami domyślnymi, backtest; kod wyjścia 0 = bramki przeszły
 .venv/bin/python -m scripts.live_refresh_report --db /tmp/live.db [--cache-dir /tmp/mf-cache]
 # testy dymne na żywo (małe zapytania: PKB 2024 z BDL, konsumpcja 2024 z Eurostatu, VAT 2024 z MF – jeden rok)
-.venv/bin/python -m pytest -m live -q
+RUN_LIVE=1 .venv/bin/python -m pytest -m live -q
 ```
 
 Skrypt odmawia pracy, gdy `--db` wskazuje istniejący plik albo bazę aplikacji (domyślną lub `$BUDGET_DB_PATH`), oraz gdy
 cache MF byłby katalogiem cache aplikacji. Domyślny cache to `<katalog bazy>/<nazwa bazy>-cache` (np. `/tmp/live-cache`).
 Po nieudanym odświeżeniu (kod 1) skrypt usuwa utworzony przez siebie plik bazy, więc można go od razu uruchomić ponownie.
-Zwykłe `pytest -q` pomija testy `live` (`addopts = -m "not live"` w `pyproject.toml`); w CI uruchamia je osobne zadanie
+Testy `live` są pomijane (skip), dopóki nie ustawiono `RUN_LIVE=1` (`backend/tests/conftest.py`) – niezależnie od wyrażenia
+`-m`, więc np. `pytest -m "not slow"` nie łączy się z siecią; w CI uruchamia je osobne zadanie
 `live-sources`, dostępne wyłącznie ręcznie (`workflow_dispatch`). Wynik pierwszego uruchomienia na żywo (2026-10-10) z
 liczbami: `docs/data-sources-discovery.md`, sekcja „Uruchomienie na żywo 2026-10-10”.
 
