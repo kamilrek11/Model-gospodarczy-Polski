@@ -128,7 +128,7 @@ liczbami: `docs/data-sources-discovery.md`, sekcja „Uruchomienie na żywo 2026
 
 - **Źródła danych są prawdziwe i zweryfikowane na żywo** (2026-10-10: GUS BDL, Eurostat, MF/dane.gov.pl; wartości zgodne z
   nagraniami i opublikowanymi sprawozdaniami). Niezweryfikowany pozostaje **model**:
-  - **14 stałych modelu oznaczonych `PLACEHOLDER-UNVERIFIED`** w `backend/app/model/config.py` (lista także w zakładce
+  - **13 stałych modelu oznaczonych `PLACEHOLDER-UNVERIFIED`** w `backend/app/model/config.py` (lista także w zakładce
     „Jakość” i w eksportach): udziały konsumpcji wg stawek VAT, luka VAT, elastyczność cenowa konsumpcji, udział małych
     podatników CIT, rozkład dochodów PIT, podział dochodów z działalności (skala/liniowy/ryczałt) i relacja przychodu do
     dochodu ryczałtowców, relacja dochodów z działalności do masy płac, krańcowa skłonność do konsumpcji, udział konsumpcji
