@@ -1,0 +1,94 @@
+# Rozpoznanie źródeł danych (GUS BDL, Eurostat, MF) – stan na 2026-10-10
+
+Raport z rozpoznania wykonalności; surowe odpowiedzi były zapisane w katalogu roboczym sesji (nie w repozytorium). Fixtures testowe
+z nagranych odpowiedzi powstają w `backend/tests/fixtures/real/`.
+
+
+## 1. Summary table
+
+BDL base = `https://bdl.stat.gov.pl/api/v1`. All BDL data URLs below: `/data/by-variable/{id}?format=json&lang=pl&unit-level=0`
+(returns only POLSKA, single page). JSON path: `results[0].values[*] -> {year:"YYYY", val:number, attrId:int}`.
+Eurostat base = `https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data`, JSON-stat 2.0 (`value` is a sparse dict keyed by flat index, `status` dict for flags; decode with `id`/`size`/`dimension.*.category.index`).
+
+| series | recommended source | request | unit | years | last 3 values | caveats / transformations |
+|---|---|---|---|---|---|---|
+| pkb_real | BDL var **458431** "dynamika produktu krajowego brutto ogółem, rok poprzedni=100" (subject P3502, GDP constant prices) | `/data/by-variable/458431?format=json&lang=pl&unit-level=0` | index, prev year=100 (measureUnitName "-") | 2000–2024 | 2022: 105.3, 2023: 100.2, 2024: 103.0 (attrId 9 = preliminary) | BDL has NO real GDP level, only growth rates. Chain: level_t = level_{t-1}·val_t/100 anchored at nominal GDP (var **458271**, mln zł, 2000–2024: 3100850 / 3415274 / 3653432) in a base year. Check first year: sister var 458272 (nominal dynamics) has 2000 = `val 0.0, attrId 4` (missing). Alternative with ready level + 2025: Eurostat `nama_10_gdp?geo=PL&na_item=B1GQ&unit=CLV20_MNAC` (2000–2025; 2023: 2666014, 2024: 2752625, 2025: 2857985 mln zł 2020 prices). |
+| employment | BDL var **154173** "Przeciętne zatrudnienie wg sekcji – ogółem" (P2836) | `/data/by-variable/154173?...unit-level=0` | etat (FTE avg employment, excl. small units per GUS methodology) | 2005–2024 | 2022: 11032433, 2023: 11041289, 2024: 11038780 | Concept = average paid employment (FTE), not "pracujący". Alternatives: BDL **1632283** BAEL "aktywni zawodowo pracujący" (tys. osób, 2010–2025: 17307 / 17231 / 17241; 1632284 is its precision %); Eurostat `nama_10_pe?geo=PL&na_item=EMP_DC&unit=THS_PER` (2000–2025: 17528.9 / 17420.0 / 17432.03p). For 2000+ coverage Eurostat is the only one. Human choice needed. |
+| wage_nominal | BDL var **64428** "Przeciętne miesięczne wynagrodzenia brutto – ogółem" (P2497) | `/data/by-variable/64428?...unit-level=0` | zł/month, nominal, gross | 2002–2025 | 2023: 7595.30, 2024: 8630.27, 2025: 9371.11 | Higher than the headline "gospodarka narodowa" average (2023 headline ≈7155 zł) — BDL regional wage series excludes entities with ≤9 employees (to be confirmed in metadata). Use growth rates, or accept level bias. 2000–2001 missing. |
+| cpi | BDL var **217230** "Wskaźnik cen towarów i usług konsumpcyjnych – ogółem" (P2955, COICOP 1999, "dane do 2025r.") | `/data/by-variable/217230?...unit-level=0` | index, prev year=100 (unit "-") | 2003–2025 | 2023: 111.4, 2024: 103.6, 2025: 103.6 | **Not a price level** — growth index. Chain: P_base=100; P_t = P_{t-1}·val_t/100. From 2026 only quarterly COICOP-2018 vars (subject P4635, e.g. 1753083 "1 kwartał / ogółem – okres poprzedni = 100") → series breaks. 2000–2002 missing. Alternative level: Eurostat `prc_hicp_aind?geo=PL&coicop=CP00` unit INX_A_AVG (HICP 2015=100, 2000–2025: 143.5 / 148.7 / 153.7) — HICP≠CPI. |
+| consumption_nominal | **NOT in BDL** (variables/search "spożycie" → 0 hits; no national-accounts expenditure subject). Use Eurostat **nama_10_gdp P31_S14** | `nama_10_gdp?format=JSON&lang=EN&geo=PL&na_item=P31_S14&unit=CP_MNAC&sinceTimePeriod=2000` | mln zł, current prices | 2000–2025 | 2023: 1934063, 2024: 2056557, 2025: 2209033 | Unit code is `CP_MNAC` (not CP_MIO_NAC — that returns empty `size` 0). /1000 → mld zł. Requires a new Eurostat client. |
+| gross_surplus | BDL var **458419** "nadwyżka operacyjna brutto" (K29 Rachunki regionalne, G549/P3520) | `/data/by-variable/458419?...unit-level=0` | mln zł, current prices | 2000–2023 | 2021: 1279108, 2022: 1553042, 2023: 1676697 | Equals Eurostat B2A3G (GOS + mixed income): 2022 identical (1553042). Lags ~2 years (no 2024). Eurostat `nama_10_gdp na_item=B2A3G unit=CP_MNAC` has 2000–2025 (2023: 1684850 revised, 2024: 1689480, 2025: 1765710). |
+| rev_vat | MF "Część tabelaryczna sprawozdania z wykonania budżetu państwa", dane.gov.pl dataset **163** (CC0) | per-year ZIP (see §B) → inner "TOM I" ZIP → file `007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx`, row label "1.1. Podatek od towarów i usług", column "Wykonanie" | tys. zł (cash, state budget) | 2015–2025 (2015–2019 to verify, 2017/2016 ZIP names differ) | 2023: 244.27, 2024: 287.68, 2025: 321.65 mld zł | /1e6 → mld zł. Layout differs across years (2024: label col A, values later; 2023/2025: label A and C, plan D, execution E) → match by label, take execution column. Pre-2015: MF website only. |
+| rev_cit | same file, row "1.4. Podatek dochodowy od osób prawnych" | as above | tys. zł | 2015–2025 | 2023: 67.88, 2024: 60.24, 2025: 63.69 mld zł | state-budget share only (JST shares excluded). |
+| rev_pit | same file, row "1.5. Podatek dochodowy od osób fizycznych" | as above | tys. zł | 2015–2025 | 2023: 91.67, 2024: 97.60, 2025: **28.75** mld zł | **Structural break 2025**: new JST revenue law moved most PIT to local governments (S1313 D51A also jumps in 2024 Eurostat). State-budget PIT is NOT comparable across 2024/2025 without adjustment. |
+
+Eurostat gov_10a_taxag (ESA accrual, unit MIO_NAC), PL, mln zł, 2000–2024:
+- `gov_10a_taxag?format=JSON&lang=EN&geo=PL&unit=MIO_NAC&sector=S13&sector=S1311&sector=S1313&na_item=D211&na_item=D51A&na_item=D51B&na_item=D51&sinceTimePeriod=2000`
+- D211 VAT, S1311 (= S13): 2022 223395, 2023 249805, 2024 290738
+- D51A household income tax, S1311: 70213 / 95239 / 81722; S13: 138019 / 149085 / 183514
+- D51B corporate income tax, S1311: 70042 / 68796 / 60956; S13: 85765 / 90989 / 87475
+Comparison with MF cash state budget: VAT 2024 287.7 (MF) vs 290.7 (ESA) — close; CIT 2024 60.2 vs 61.0; PIT 2023 91.7 vs 95.2. ESA S1311 = whole central government (incl. funds/agencies), accrual (time-adjusted), and D51A includes items that MF books elsewhere — order of magnitude matches, not identical. Eurostat lacks 2025 until ~Apr 2026+ (latest here: 2024; dataset updated 2026-07-21).
+
+## 2. Real BDL API vs backend/app/data/gus_bdl.py assumptions
+
+1. **National unit name is `"POLSKA"`** (uppercase), id `000000000000`, level 0 (`/units/000000000000` → `{"id":"000000000000","name":"POLSKA","level":0,...,"years":[1995..2026]}`). Code compares with `casefold()` so "Polska" still matches — OK, but matching on `id == "000000000000"` is safer (also e.g. "Kamienica Polska" exists as a gmina; casefold equality avoids it, but id is unambiguous).
+2. **Missing values are NOT `null`**: they come as `"val": 0.0` with a non-value `attrId` (e.g. 458272 year 2000: `{"year":"2000","val":0.0,"attrId":4}`; attrId 4 = 'x' "Brak informacji..."). Code only skips `val is None` → would ingest 0.0 as data. Must filter by attrId: value-bearing attrIds per `/attributes`: 1, 3, 9 (preliminary 's'), 11, 13, 20, 21, 97; non-value: 0, 4, 7, 14, 15, 17, 50, 91, 94(?), 98. Safest: treat `attrId in {1,3,9,11,13,20,21,97}` as valid.
+3. **Use `unit-level=0`** query param: returns only POLSKA in a single response; the code instead pages through all ~41 territorial units (many requests, rate-limit risk). Also supported: `year=2022&year=2023` (repeatable) to restrict years.
+4. **Response shape of /data/by-variable**: top-level keys `totalRecords, links, variableId, measureUnitId, aggregateId, lastUpdate, results` — **no `page`/`pageSize` keys** (they exist on /subjects, /variables, /units). With `unit-level=0` the `links` key is absent entirely. Code handles `links` missing (`or {}`) — OK. Synthetic fixtures include `page`/`pageSize` and "Polska" (title case) — unlike reality.
+5. **Pagination**: `links.{first,self,next,last}` (and `prev`); `next` absent on last page; next URLs are absolute and carry `page`/`page-size` — code matches. **Default page-size = 10; max = 100** (`page-size=101` → HTTP 412 with `{"errors":[{"errorResult":"Parametr 'pageSize' może przyjmować jedynie wartości z zakresu <1, 100>.",...}]}`). Code default 100 — OK.
+6. **year is a string** ("2024"), val is a number — code's int()/float() fine. Variable level metadata: `measureUnitName` ("mln zł", "zł", "etat", "-" for indexes) is on `/variables/{id}`, not in data response (data only has `measureUnitId`). Code doesn't check units → no validation that the series is mln zł vs index.
+7. **Rate limits (anonymous)**: headers `X-Rate-Limit-Limit: 7d`, `X-Rate-Limit-Remaining: ~9990`, `X-Rate-Limit-Reset`. Observed **HTTP 429** on `/units?level=0` after ~30 requests: body `{"errorResult":"Przekroczono limit wywołań API! Maksymalna ilość żądań to 1000 na 12 godz."}`, header **`Retry-After: 3 sek`** (non-numeric! standard parsers fail). Sandbox egress IP may be shared. Registering a free `X-ClientId` header raises limits (per BDL docs; not tested). Code has no retry/backoff and no X-ClientId support; a 429 becomes SourceError.
+8. Variables of interest are mostly growth indices ("rok poprzedni=100"), not levels (pkb_real, cpi) → code/config assume level series (config.py:98 note). Needs a chaining transformation step.
+9. `/variables/search?name=...` exists; empty result has no `links` key. `/subjects?parent-id=` used for hierarchy; there is **no "Rachunki narodowe" subject** — national-accounts data live under K29 "RACHUNKI REGIONALNE" (with POLSKA aggregate).
+
+## 3. Unresolved items needing a human decision (ranked)
+
+1. **rev_pit structural break 2025** (state-budget PIT 97.6 → 28.75 mld zł after JST financing reform). Decide: model PIT total (state + JST shares) vs state-budget share only; with MF data you need JST shares from elsewhere for the total. Eurostat S13 D51A gives general-government total (accrual).
+2. **Cash state budget (MF, 2015–2025, XLSX in ZIP, label-matched parsing) vs accrual general/central government (Eurostat gov_10a_taxag, clean JSON API, 2000–2024)**. Recommendation for v1: MF dataset 163 for rev_* (it is literally "budżet państwa" and has 2025), with Eurostat S1311 as cross-check/backfill for 2000–2014 marked as different concept. Alternatively, if 2000+ history matters more than concept fidelity, Eurostat only.
+3. **consumption_nominal not in BDL** → add a Eurostat client (it would also give pkb_real level, gross_surplus to 2025, employment 2000+). Consider moving all macro to Eurostat nama_10_* for one consistent, longer source.
+4. employment concept: FTE avg paid employment (BDL 154173, 2005+) vs BAEL employed persons (2010+) vs national-accounts EMP_DC (Eurostat 2000+).
+5. CPI: BDL growth index 2003–2025, annual series ends 2025 (COICOP 2018 switch, quarterly only so far) → chaining + future break; or Eurostat HICP level.
+6. wage_nominal: BDL 64428 excludes small firms (level higher than headline); starts 2002.
+7. MF XLSX layout drift between years and ZIP naming not stable → enumerate via `https://api.dane.gov.pl/1.4/datasets/163/resources?per_page=50&sort=-data_date` and take `attributes.link`; inner ZIP/folder names differ (2023 has `XLS/` subfolder; 2025 also bundles PDFs). Pre-2015 execution not on dane.gov.pl.
+8. BDL X-ClientId registration + 429 handling ("Retry-After: 3 sek").
+
+## B. Budget execution details
+
+- B1 BDL: K27 "FINANSE PUBLICZNE" children are only JST budgets (G195/G197/G199/G201/G423/G425/G497 + archive) — **no state-budget revenue by tax**.
+- B2 Eurostat: see table above (works, JSON-stat, codes D211, D51A, D51B, D51; sectors S13, S1311, S1313; unit MIO_NAC).
+- B3 MF/dane.gov.pl: dataset 163 "Część tabelaryczna sprawozdań z wykonania budżetu państwa", license CC0 1.0, annual, 11 resources (zip) for 2015–2025 (2025 posted 2026-06-11). Resource links (stable media URLs, but random suffixes, e.g. 2025 `..._O6qXW9j.zip`) — enumerate via API, don't hardcode:
+  - 2025 id 2054935 https://api.dane.gov.pl/media/resources/20260611/Sprawozdanie_z_wykonania_bud%C5%BCetu_pa%C5%84stwa_za_2025r_TOM_I_i_II_O6qXW9j.zip
+  - 2024 id 72399 https://api.dane.gov.pl/media/resources/20250818/Sprawozdanie_z_wykonania_za_2024_rok_TOM_I_i__II_XLS.zip (6.4 MB)
+  - 2023 id 58249 https://api.dane.gov.pl/media/resources/20240604/Sprawozdanie_z_wykonania_bud%C5%BCetu_pa%C5%84stwa_za_2023_rok_TOM_I_i__II_XLS.zip
+  - 2022 48622, 2021 38967, 2020 30562, 2019 24153, 2018 17629, 2017 337 (www.dane.gov.pl), 2016 19452, 2015 19451.
+  - Parse recipe: outer zip → inner "…TOM I….zip" → file matching `007*DOCHODY BP ZESTAWIENIE OG*.xlsx` (sheet "{YYYY} Załacznik nr 1"; header "w tysiącach zł"; first rows: "DOCHODY OGÓŁEM", "1.1. Podatek od towarów i usług", "1.4. Podatek dochodowy od osób prawnych", "1.5. Podatek dochodowy od osób fizycznych"); take the "Wykonanie" (last numeric) cell in the row; /1e6 → mld zł. Also `005 - ZESTAWIENIE OGÓLNE…xlsx` gives totals (2024 dochody 623239830.6 tys. zł). Zip filenames inside use `#Uxxxx` escapes for Polish chars.
+- MF website (mf.gov.pl) itself was not probed further (time/budget); dataset 163 is MF's own publication on the official portal.
+- B4 NBP: nothing relevant. Not probed.
+
+## C. PIT income distribution
+dane.gov.pl dataset **191** "Informacje dotyczące rozliczenia podatku dochodowego od osób fizycznych" — 14 resources, **PDF only**, years 2008–2021 (e.g. 2021: https://api.dane.gov.pl/media/resources/20230102/INFORMACJA_PIT_za_2021.pdf). Contains the taxpayers-by-bracket tables, but not machine-readable (PDF table extraction needed). Sister dataset 162 (CIT) notes "Począwszy od 2022 r. informacje publikowane są wyłącznie na stronie podatki.gov.pl" — likely same for PIT (podatki.gov.pl page fetched but returned a 955-byte shell; formats there unverified).
+
+## D. ZUS
+dane.gov.pl dataset 158 (FUS/FEP/FRD plan execution incl. budget part 73) has a single HTML resource from 2015 — not usable. Financial statements datasets (19, 226, 235) are old (2012–2014). psz.zus.pl (Portal Statystyczny ZUS) and zus.pl respond HTTP 200 but no API was verified. For v2, Eurostat gov_10a_taxag D61 (net social contributions, S1314 social security funds) is the clean machine-readable fallback; ZUS-specific cash revenue would need ZUS annual "Informacja o wykonaniu planu finansowego FUS" (PDF/XLSX) — unverified.
+
+## 4. Raw evidence (saved files under SCRATCH)
+
+- bdl/h_subjects.txt — headers: `X-Rate-Limit-Limit: 7d`, `X-Rate-Limit-Remaining: 9998`
+- bdl/subjects_root.json, sub_K29.json, sub_K15.json, sub_K4.json, sub_K40.json, sub_K27.json, sub_G543/G541/G549/G405/G479/G403.json
+- bdl/var_P3502.json: `{"id":458431,"subjectId":"P3502","n1":"dynamika produktu krajowego brutto ogółem, rok poprzedni=100","level":3,"measureUnitId":1,"measureUnitName":"-"}`
+- bdl/var_P3498.json (458271 "produkt krajowy brutto ogółem" mln zł), var_P3520.json (458419 mln zł), var_P2955.json (217230 "ogółem" "-"), var_P2497.json (64428 zł), var_P2836.json (154173 etat), var_P4089.json (1632283 tys. osób), var_P4283*.json (monthly employment, 756 vars), var_64428.json (`"years":[2002,…,2025]`)
+- bdl/data_458271_l0.json: `{"totalRecords":1,"variableId":458271,"measureUnitId":6,"aggregateId":1,"lastUpdate":null,"results":[{"id":"000000000000","name":"POLSKA","values":[{"year":"2000","val":751669,"attrId":1},…,{"year":"2024","val":3653432,"attrId":9}]}]}`
+- bdl/data_458431_l0.json, data_458419_l0.json, data_217230_l0.json, data_64428_l0.json, data_154173_l0.json, data_1632283_l0.json, data_458272_l0.json (`{"year":"2000","val":0.0,"attrId":4}`)
+- bdl/data_458271_all_ps5.json — pagination: `"links":{"first":…,"self":…,"next":"…&page=1","last":"…&page=8"}`, totalRecords 41, includes MAKROREGION/REGION/województwa
+- bdl/data_ps101.json — HTTP 412 page-size error; data_ps_default.json — default 10 per page
+- bdl/attributes.json — attrId dictionary
+- bdl/units_l0.json, units_l0_retry.json, h_units.txt — HTTP 429, `Retry-After: 3 sek`, "Maksymalna ilość żądań to 1000 na 12 godz."
+- bdl/unit_000000000000.json, units_search.json
+- bdl/vsearch_spozycie.json (0 results), vsearch_pracujacy.json, vsearch_konsump.json
+- eurostat/taxag_PL_S1311_all.json (na_item code list), taxag_PL_sel.json (values above), nama_gdp_PL.json, nama_gdp_PL_units.json (unit code list), hicp_aind_PL.json, nama_pe_PL.json
+- danegov/search_wykonanie.json, ds163.json, ds163_res.json
+- danegov/zip2024/ (sprawozdanie_2024.zip, outer/, t1/005…, t1/007…), zip2025/ (s.zip, outer/, t1/007…), zip2023/ (s.zip, outer/, t1/XLS/007…)
+  - 2024 007 excerpt: `['1.1. Podatek od towarów i usług', 293500000, 287683368.91]`, `['1.4. Podatek dochodowy od osób prawnych', 58556935, 60239719.55]`, `['1.5. Podatek dochodowy od osób fizycznych', 97745431, 97599844.06]` (plan, wykonanie; tys. zł)
+  - 2025: VAT E14 321646381.78, CIT E17 63686737.92, PIT E18 28752115.01; 2023: VAT 244267385.71, CIT 67883082.34, PIT 91665807.67
+- jsonstat.py (SCRATCH root) — helper script used to decode JSON-stat.
+- PIT (dataset 191) and ZUS (dataset 158) metadata were read to stdout only (not saved, due to plan mode).
