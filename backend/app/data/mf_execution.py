@@ -36,7 +36,7 @@ import httpx
 import openpyxl
 import pandas as pd
 
-from app.data.base import SourceError, to_frame
+from app.data.base import SourceError, get_capped, to_frame
 from app.data.gus_bdl import GusBdlClient
 from app.data.series_map import MF_DATASET_ID, MF_EXECUTION_ROWS
 
@@ -120,7 +120,7 @@ def _url_problem(url: str) -> str | None:
 def _get_json(http: httpx.Client, url: str, params: dict, *, sleep, max_retries: int) -> object:
     for attempt in range(max_retries + 1):
         try:
-            r = http.get(url, params=params, timeout=LIST_TIMEOUT, follow_redirects=False)
+            r = get_capped(http, url, source=SOURCE, params=params, timeout=LIST_TIMEOUT, follow_redirects=False)
         except httpx.HTTPError as e:
             raise _err(f"request failed for {url}: {e}") from e
         if _url_problem(str(r.url)):

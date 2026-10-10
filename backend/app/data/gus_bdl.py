@@ -4,7 +4,7 @@ import time
 import httpx
 import pandas as pd
 
-from app.data.base import SourceError, to_frame
+from app.data.base import SourceError, get_capped, to_frame
 from app.data.series_map import BDL_NATIONAL_UNIT_ID, BDL_SERIES
 from app.data.transform import chain_growth
 
@@ -51,7 +51,7 @@ class GusBdlClient:
         headers = {"X-ClientId": self.client_id} if self.client_id else {}
         for attempt in range(self.max_retries + 1):
             try:
-                r = self.http.get(url, params=params, headers=headers)
+                r = get_capped(self.http, url, source=self.name, params=params, headers=headers)
             except httpx.HTTPError as e:
                 raise SourceError(self.name, f"request failed for {url}: {e}") from e
             if r.status_code == 429 or r.status_code >= 500:

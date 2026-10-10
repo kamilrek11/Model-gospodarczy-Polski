@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 import httpx
 import pandas as pd
 
-from app.data.base import SourceError, to_frame
+from app.data.base import SourceError, get_capped, to_frame
 from app.data.gus_bdl import GusBdlClient
 
 EUROSTAT_BASE = "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data"
@@ -99,7 +99,7 @@ class EurostatClient:
     def _get(self, url: str, params: dict) -> object:
         for attempt in range(self.max_retries + 1):
             try:
-                r = self.http.get(url, params=params, timeout=TIMEOUT, follow_redirects=False)
+                r = get_capped(self.http, url, source=SOURCE, params=params, timeout=TIMEOUT, follow_redirects=False)
             except httpx.HTTPError as e:
                 raise SourceError(SOURCE, f"request failed for {url}: {e}") from e
             if r.url.scheme != "https" or r.url.host != self.host:
