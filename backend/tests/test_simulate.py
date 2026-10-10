@@ -9,7 +9,9 @@ from app.api.refresh import get_store
 from app.main import app
 from app.model.macro import MACRO_VARS, MacroModel, fit_macro
 from app.model.params import defaults
+from app.model import config
 from app.model.simulate import BANDS, simulate
+from app.model.taxes.vat import vat_revenue
 from app.store import Store
 from tests.synthetic import synthetic_levels
 
@@ -68,6 +70,37 @@ def test_higher_vat_raises_vat_median_and_dampens_consumption(model, hist):
     c, c_base = np.array(res.macro["consumption_real"]["median"]), np.array(res.macro["consumption_real"]["baseline"])
     assert np.all(c < c_base)
     # second round reaches other bases: PIT falls through employment
+    assert np.all(np.array(res.taxes["pit"]["median"]) < np.array(res.baseline["pit"]["median"]))
+
+
+def _vat_ratio(p: dict) -> float:
+    law = defaults()
+    c = np.array([100.0])
+    vr = lambda q: vat_revenue(c, config.VAT_CONSUMPTION_SHARES, q, config.VAT_GAP, config.VAT_PRICE_ELASTICITY, law)[0]  # noqa: E731
+    return float(vr({**law, **p}) / vr(law))
+
+
+def test_vat_change_counts_volume_response_exactly_once(model, hist):
+    # VAT-only reform: no PIT change, so per path VAT_scen / VAT_base is the constant
+    # vat_revenue(c, p, law) / vat_revenue(c, law, law). Feeding consumption_feedback into
+    # the VAT base as well (double count) would multiply this by (1 + f_vat) != 1.
+    p = {"vat_rate_standard": 0.25}
+    res = simulate(model, hist, p, horizon=5, n_paths=500, seed=4)
+    ratio = np.array(res.taxes["vat"]["median"]) / np.array(res.baseline["vat"]["median"])
+    np.testing.assert_allclose(ratio, _vat_ratio(p), rtol=1e-12)
+
+
+def test_pit_cut_raises_consumption_and_vat_consistently(model, hist):
+    # PIT 12% -> 10%: disposable income up -> nominal consumption up by (1 + f_pit), VAT rates
+    # unchanged. vat_revenue is linear in consumption at unchanged rates (pass-through 1),
+    # so per path VAT_scen / VAT_base == consumption_scen / consumption_base == 1 + f_pit.
+    # Expectation on medians: the two ratios agree within 0.1% and both exceed 1.
+    res = simulate(model, hist, {"pit_rate_low": 0.10}, horizon=5, n_paths=1000, seed=5)
+    vat_ratio = np.array(res.taxes["vat"]["median"]) / np.array(res.baseline["vat"]["median"])
+    c = res.macro["consumption_nominal"]
+    cons_ratio = np.array(c["median"]) / np.array(c["baseline"])
+    assert np.all(vat_ratio > 1.0) and np.all(cons_ratio > 1.0)
+    np.testing.assert_allclose(vat_ratio, cons_ratio, rtol=1e-3)
     assert np.all(np.array(res.taxes["pit"]["median"]) < np.array(res.baseline["pit"]["median"]))
 
 

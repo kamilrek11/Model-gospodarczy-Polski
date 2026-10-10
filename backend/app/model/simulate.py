@@ -9,26 +9,27 @@ Macro paths
     parameters the scenario equals the baseline exactly.
 
 Second round (one step, closed within each simulated year; nothing is counted twice)
-    1. VAT: vat_revenue gets the PRE-feedback consumption path (VAR consumption at baseline
-       rates) and itself owns the volume response to VAT rates (vat.py contract). Its output
-       is never recomputed from adjusted consumption.
-    2. Household channel, from the tax change to macro variables:
-         f_vat = consumption_feedback(eff_vat_base, eff_vat_new, elasticity)
-                 (real consumption change from VAT prices; the same response vat_revenue
-                 applies, used here ONLY for the other variables)
+    1. Household disposable income (PIT): computed first, from the first-round PIT
+       (PIT on the unadjusted wage bill):
          f_pit = -HOUSEHOLD_MPC * (PIT_first_round - PIT_first_round_baseline) / C
-                 (disposable income; first-round PIT = PIT on the unadjusted wage bill)
+    2. VAT: vat_revenue gets C * (1 + f_pit), i.e. consumption at BASELINE prices, moved
+       only by the PIT income channel and NOT by the VAT price response. vat_revenue itself
+       owns the volume response to VAT rates (vat.py contract), so f_vat below never
+       enters the VAT base (that would be a double count). With unchanged PIT, f_pit = 0
+       and VAT gets the pre-feedback path exactly.
+    3. Macro variables:
+         f_vat = consumption_feedback(eff_vat_base, eff_vat_new, elasticity)
+                 (the same response vat_revenue applies, used here ONLY for other variables)
          real consumption factor  c = (1 + f_vat) * (1 + f_pit)
          consumer prices (CPI)    x (1 + eff_vat_new) / (1 + eff_vat_base)   (full pass-through)
          real GDP                 x 1 + CONSUMPTION_GDP_SHARE * (c - 1)
          employment               x 1 + EMPLOYMENT_GDP_ELASTICITY * (gdp factor - 1)
          nominal wage             unchanged (no wage-price feedback in v1)
-    3. Bases of the other taxes are rebuilt from the adjusted macro variables:
+    4. Bases of the other taxes are rebuilt from the adjusted macro variables:
          PIT: wage bill = wage_nominal * adjusted employment (+ business income tied to it)
          CIT: gross surplus x real GDP factor (VAT price effect does not raise surplus)
-       PIT and CIT are computed once on these bases (no further iteration). VAT is not
-       recomputed: its own volume response is already in step 1, and the PIT-driven
-       consumption change is deliberately not fed back into VAT in v1.
+       PIT and CIT are computed once on these bases (no further iteration); the second-round
+       PIT change does not loop back into consumption or VAT.
     Every factor is floored at 0, so extreme parameters cannot produce negative bases.
 
 Calibration
@@ -68,8 +69,8 @@ REQUIRED_SERIES: dict[str, tuple[str, ...]] = {
 }
 
 STRUCTURAL_ASSUMPTIONS: tuple[tuple[str, str], ...] = (
-    ("structure.vat_pre_feedback", "VAT liczony od konsumpcji przed sprzężeniem zwrotnym; reakcję wolumenu na stawki VAT liczy wyłącznie moduł VAT."),
-    ("structure.second_round", "Druga runda w jednym kroku: zmiana VAT/PIT -> ceny i dochód rozporządzalny -> konsumpcja, PKB, zatrudnienie -> bazy PIT i CIT."),
+    ("structure.vat_base", "VAT liczony od konsumpcji w cenach bazowych skorygowanej tylko o zmianę dochodu rozporządzalnego z PIT; reakcję wolumenu na stawki VAT liczy wyłącznie moduł VAT (bez podwójnego liczenia)."),
+    ("structure.second_round", "Druga runda w jednym kroku: zmiana VAT/PIT -> ceny i dochód rozporządzalny -> konsumpcja (i baza VAT), PKB, zatrudnienie -> bazy PIT i CIT."),
     ("structure.wages_fixed", "Nominalne wynagrodzenie nie reaguje na zmiany podatków (brak sprzężenia płacowo-cenowego w v1)."),
     ("structure.gross_surplus_projection", "Nadwyżka operacyjna brutto rośnie jak realny PKB x CPI od ostatniego roku danych."),
     ("structure.calibration_current_law", "Kalibracja liczy lata historyczne przy obecnym prawie (domyślne parametry), nie przy prawie obowiązującym w danym roku."),
@@ -255,20 +256,23 @@ def _scenario(lv: dict[str, np.ndarray], p: dict, law: dict, ctx: _Context, pit_
     emp, wage = lv["employment"], lv["wage_nominal"]
     taxes: dict[str, np.ndarray] = {}
 
-    # 1. VAT on the pre-feedback consumption path (owns its volume response)
-    if "vat" in ctx.enabled:
-        taxes["vat"] = ctx.calib["vat"] * _vat(cons, p, law)
-
-    # 2. household channel -> macro variables
-    eff_law = effective_vat_rate(config.VAT_CONSUMPTION_SHARES, law)
-    eff_new = effective_vat_rate(config.VAT_CONSUMPTION_SHARES, p)
-    f_vat = consumption_feedback(eff_law, eff_new, config.VAT_PRICE_ELASTICITY)
-    price = (1.0 + eff_new) / (1.0 + eff_law)
+    # 1. PIT disposable-income channel (first round)
     f_pit = 0.0
     if pit_first_law is not None:
         d_pit = _pit(wage * emp, ctx.dist, p, ctx.calib["pit"]) - pit_first_law
         f_pit = -config.HOUSEHOLD_MPC * d_pit / (cons * config.CONSUMPTION_SERIES_TO_MLD_ZL)
-    c_factor = np.maximum((1.0 + f_vat) * (1.0 + f_pit), 0.0)
+    pit_factor = np.maximum(1.0 + f_pit, 0.0)
+
+    # 2. VAT on consumption at baseline prices moved only by the PIT channel (owns its volume response)
+    if "vat" in ctx.enabled:
+        taxes["vat"] = ctx.calib["vat"] * _vat(cons * pit_factor, p, law)
+
+    # 3. macro variables
+    eff_law = effective_vat_rate(config.VAT_CONSUMPTION_SHARES, law)
+    eff_new = effective_vat_rate(config.VAT_CONSUMPTION_SHARES, p)
+    f_vat = consumption_feedback(eff_law, eff_new, config.VAT_PRICE_ELASTICITY)
+    price = (1.0 + eff_new) / (1.0 + eff_law)
+    c_factor = np.maximum((1.0 + f_vat) * pit_factor, 0.0)
     gdp_factor = np.maximum(1.0 + config.CONSUMPTION_GDP_SHARE * (c_factor - 1.0), 0.0)
     emp_factor = np.maximum(1.0 + config.EMPLOYMENT_GDP_ELASTICITY * (gdp_factor - 1.0), 0.0)
     macro = {
@@ -280,7 +284,7 @@ def _scenario(lv: dict[str, np.ndarray], p: dict, law: dict, ctx: _Context, pit_
         "consumption_real": cons / cpi * c_factor,
     }
 
-    # 3. second-round bases for PIT and CIT, computed once
+    # 4. second-round bases for PIT and CIT, computed once
     if "pit" in ctx.enabled:
         taxes["pit"] = _pit(wage * macro["employment"], ctx.dist, p, ctx.calib["pit"])
     if "cit" in ctx.enabled:
