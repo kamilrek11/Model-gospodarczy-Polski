@@ -132,6 +132,44 @@ test.describe("seeded store (synthetic data)", () => {
     expect(colours.w).toBeGreaterThan(100);
     expect(colours.n).toBeGreaterThan(5);
 
+    // Regression: the provenance footer ("DANE SYNTETYCZNE …") must be legible, not clipped by the chart's own viewBox.
+    // The seeded instance is synthetic, so a footer strip (22 CSS px, rendered at scale 2) is present at the bottom.
+    const layout = await page.evaluate(async (b64) => {
+      const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const bmp = await createImageBitmap(new Blob([bin], { type: "image/png" }));
+      const c = document.createElement("canvas");
+      c.width = bmp.width;
+      c.height = bmp.height;
+      const ctx = c.getContext("2d")!;
+      ctx.drawImage(bmp, 0, 0);
+      const { data, width, height } = ctx.getImageData(0, 0, c.width, c.height);
+      const rowsAlpha = (from: number, to: number) => {
+        let transparent = 0;
+        for (let y = from; y < to; y++) for (let x = 0; x < width; x++) if (data[(y * width + x) * 4 + 3] < 255) transparent++;
+        return transparent;
+      };
+      const bg = [data[(height - 1) * width * 4], data[(height - 1) * width * 4 + 1], data[(height - 1) * width * 4 + 2]];
+      const footerTop = height - 22 * 2; // device pixels
+      let ink = 0;
+      let inkRows = new Set<number>();
+      for (let y = footerTop; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          if (Math.abs(data[i] - bg[0]) + Math.abs(data[i + 1] - bg[1]) + Math.abs(data[i + 2] - bg[2]) > 90) {
+            ink++;
+            inkRows.add(y);
+          }
+        }
+      }
+      return { transparentTop: rowsAlpha(0, 24), transparentBottom: rowsAlpha(height - 24, height), ink, inkRowSpan: inkRows.size };
+    }, pngBytes.toString("base64"));
+    // No transparent bands (the clipped export had ~11 empty rows at the top and bottom).
+    expect(layout.transparentTop).toBe(0);
+    expect(layout.transparentBottom).toBe(0);
+    // Footer text is fully drawn: many ink pixels spread over most of an 11px text line (≈ 8+ device rows), not just a 3–4 row sliver.
+    expect(layout.ink).toBeGreaterThan(400);
+    expect(layout.inkRowSpan).toBeGreaterThanOrEqual(8);
+
     const [pdf] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Wykresy PDF" }).click()]);
     const pdfBytes = await read(pdf);
     expect(pdfBytes.subarray(0, 4).toString("latin1")).toBe("%PDF");

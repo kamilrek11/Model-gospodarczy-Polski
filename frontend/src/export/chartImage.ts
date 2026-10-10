@@ -21,31 +21,52 @@ export function svgSize(svg: Element): { width: number; height: number } {
 
 export const FOOTER_HEIGHT = 22;
 
-/** Samodzielny dokument SVG: bez zmiennych CSS, z tłem i rozmiarem; opcjonalna stopka (pochodzenie danych) pod wykresem. */
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * Samodzielny dokument SVG: bez zmiennych CSS, z tłem i rozmiarem; opcjonalna stopka (pochodzenie danych) pod wykresem.
+ *
+ * Wykres Recharts ma własny viewBox, więc samo podniesienie jego `height` o wysokość stopki przesuwa treść
+ * (xMidYMid meet) i wypycha stopkę poza obraz. Dlatego oryginalny SVG zostaje zagnieżdżony w zewnętrznym płótnie
+ * o rozmiarze eksportu (viewBox = rozmiar w pikselach): wykres zachowuje swój viewBox i leży w lewym górnym rogu,
+ * a tło i stopka są rysowane we współrzędnych płótna.
+ */
 export function prepareSvg(svg: Element, getVar: (name: string) => string, footer?: string): { markup: string; width: number; height: number } {
   const { width, height: chartHeight } = svgSize(svg);
   const height = footer ? chartHeight + FOOTER_HEIGHT : chartHeight;
-  const clone = svg.cloneNode(true) as Element;
-  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  clone.setAttribute("width", String(width));
-  clone.setAttribute("height", String(height));
-  clone.setAttribute("font-family", getVar("--font-family") || "system-ui, sans-serif");
-  const bg = getVar("--surface-1").trim() || "#ffffff";
-  const rect = clone.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "rect");
+  const doc = svg.ownerDocument;
+
+  const chart = svg.cloneNode(true) as Element;
+  chart.removeAttribute("xmlns");
+  chart.setAttribute("x", "0");
+  chart.setAttribute("y", "0");
+  chart.setAttribute("width", String(width));
+  chart.setAttribute("height", String(chartHeight));
+
+  // Przestrzeń nazw wystarczy nadać w createElementNS – serializator sam emituje xmlns (ręczny atrybut dałby duplikat = niepoprawny XML).
+  const canvas = doc.createElementNS(SVG_NS, "svg");
+  canvas.setAttribute("width", String(width));
+  canvas.setAttribute("height", String(height));
+  canvas.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  canvas.setAttribute("font-family", getVar("--font-family") || "system-ui, sans-serif");
+
+  const rect = doc.createElementNS(SVG_NS, "rect");
   rect.setAttribute("width", "100%");
   rect.setAttribute("height", "100%");
-  rect.setAttribute("fill", bg);
-  clone.insertBefore(rect, clone.firstChild);
+  rect.setAttribute("fill", getVar("--surface-1").trim() || "#ffffff");
+  canvas.appendChild(rect);
+  canvas.appendChild(chart);
+
   if (footer) {
-    const text = clone.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "text");
+    const text = doc.createElementNS(SVG_NS, "text");
     text.setAttribute("x", "8");
     text.setAttribute("y", String(height - 7));
     text.setAttribute("font-size", "11");
     text.setAttribute("fill", getVar("--text-secondary").trim() || "#52514e");
     text.textContent = footer;
-    clone.appendChild(text);
+    canvas.appendChild(text);
   }
-  const markup = resolveCssVars(new XMLSerializer().serializeToString(clone), getVar);
+  const markup = resolveCssVars(new XMLSerializer().serializeToString(canvas), getVar);
   return { markup, width, height };
 }
 

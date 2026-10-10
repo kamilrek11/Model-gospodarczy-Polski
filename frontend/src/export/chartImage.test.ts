@@ -33,6 +33,48 @@ describe("chart image helpers", () => {
     expect([width, height]).toEqual([400, 300]);
   });
 
+  it("footer fits inside the canvas for a Recharts-style SVG that carries a viewBox", () => {
+    const footer = "DANE SYNTETYCZNE – nie są to dane GUS/MF";
+    const { markup, width, height } = prepareSvg(makeSvg('width="400" height="300" viewBox="0 0 400 300"'), getVar, footer);
+    expect([width, height]).toEqual([400, 322]);
+
+    const doc = new DOMParser().parseFromString(markup, "image/svg+xml");
+    const outer = doc.documentElement;
+    // The outer canvas viewBox must match the exported pixel size, otherwise the content is shifted/clipped.
+    expect(outer.getAttribute("viewBox")).toBe("0 0 400 322");
+    expect(outer.getAttribute("width")).toBe("400");
+    expect(outer.getAttribute("height")).toBe("322");
+
+    // The original chart keeps its own size and viewBox and sits at the top-left corner (no centring offset).
+    const chart = outer.querySelector("svg")!;
+    expect(chart.getAttribute("viewBox")).toBe("0 0 400 300");
+    expect(chart.getAttribute("width")).toBe("400");
+    expect(chart.getAttribute("height")).toBe("300");
+    expect(chart.getAttribute("x")).toBe("0");
+    expect(chart.getAttribute("y")).toBe("0");
+
+    // The footer belongs to the outer canvas and its baseline lies in the added strip, inside the canvas.
+    const text = Array.from(outer.querySelectorAll("text")).find((t) => t.textContent === footer)!;
+    expect(text.parentNode).toBe(outer);
+    const y = Number(text.getAttribute("y"));
+    expect(y).toBeGreaterThan(300);
+    expect(y).toBeLessThan(322);
+
+    // The background covers the whole canvas, footer strip included.
+    const bg = outer.querySelector(":scope > rect")!;
+    expect(bg.getAttribute("width")).toBe("100%");
+    expect(bg.getAttribute("height")).toBe("100%");
+  });
+
+  it("without a footer the canvas is exactly the chart size and the chart is still wrapped consistently", () => {
+    const { markup, width, height } = prepareSvg(makeSvg('width="400" height="300" viewBox="0 0 400 300"'), getVar);
+    expect([width, height]).toEqual([400, 300]);
+    const outer = new DOMParser().parseFromString(markup, "image/svg+xml").documentElement;
+    expect(outer.getAttribute("viewBox")).toBe("0 0 400 300");
+    expect(outer.querySelector("svg")!.getAttribute("height")).toBe("300");
+    expect(outer.querySelector("text[font-size='11']")).toBeNull();
+  });
+
   it("chartToPng passes resolved markup to the (stubbed) rasteriser", async () => {
     const blob = new Blob(["png"], { type: "image/png" });
     const rasterize = vi.fn(async () => blob);
