@@ -8,6 +8,8 @@ export interface SimulationOptions {
   horizon?: number;
   nPaths?: number;
   seed?: number;
+  /** Zmiana wartości wymusza ponowne obliczenie (np. po odświeżeniu danych). */
+  refreshKey?: number;
 }
 
 export interface UseSimulation {
@@ -19,7 +21,7 @@ export interface UseSimulation {
 /** Symulacja z debounce 300 ms; poprzednie żądanie jest anulowane (AbortController). */
 export function useSimulation(
   params: Record<string, number> | null,
-  { horizon = 5, nPaths = 1000, seed }: SimulationOptions = {},
+  { horizon = 5, nPaths = 1000, seed, refreshKey = 0 }: SimulationOptions = {},
 ): UseSimulation {
   // Zawartość parametrów (nie tożsamość obiektu) decyduje o ponownym uruchomieniu.
   const paramsKey = params === null ? null : JSON.stringify(params);
@@ -46,7 +48,7 @@ export function useSimulation(
       clearTimeout(timer);
       controller.abort();
     };
-  }, [paramsKey, horizon, nPaths, seed]);
+  }, [paramsKey, horizon, nPaths, seed, refreshKey]);
 
   return state;
 }

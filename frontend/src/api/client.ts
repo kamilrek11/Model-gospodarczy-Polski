@@ -1,4 +1,4 @@
-import type { ApiErrorKind, ParamSpec, RefreshStatus, SimulateRequest, SimulationResult } from "./types";
+import type { ApiErrorKind, HistoryData, ParamSpec, RefreshStatus, SimulateRequest, SimulationResult } from "./types";
 
 export class ApiError extends Error {
   kind: ApiErrorKind;
@@ -54,4 +54,8 @@ export async function startRefresh(): Promise<void> {
 
 export function getRefreshStatus(signal?: AbortSignal): Promise<RefreshStatus> {
   return request<RefreshStatus>("/refresh/status", { signal });
+}
+
+export function getHistory(signal?: AbortSignal): Promise<HistoryData> {
+  return request<HistoryData>("/history", { signal });
 }
