@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ParamSpec } from "../api/types";
+import realParameters from "../testdata/parameters.json";
 import { ParameterPanel } from "./ParameterPanel";
 
 const schema: ParamSpec[] = [
@@ -90,5 +91,15 @@ describe("ParameterPanel", () => {
     expect(input).toHaveValue("19");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalledWith("cit_rate", 0.8);
+  });
+});
+
+describe("ParameterPanel with the real backend contract", () => {
+  it("renders a section and a field for every parameter of the backend schema", () => {
+    const real = realParameters as ParamSpec[];
+    const vals = Object.fromEntries(real.map((s) => [s.key, s.default]));
+    render(<ParameterPanel schema={real} values={vals} onChange={vi.fn()} onReset={vi.fn()} />);
+    expect(screen.getAllByRole("group")).toHaveLength(3);
+    for (const s of real) expect(screen.getByLabelText(s.label, { exact: true })).toBeInTheDocument();
   });
 });

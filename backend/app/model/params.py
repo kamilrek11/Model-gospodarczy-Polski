@@ -23,17 +23,17 @@ def _amount(key, label, tax, default, description, max_):
 
 
 PARAMETER_SCHEMA: list[ParamSpec] = [
-    _rate("pit_rate_low", "PIT - stawka niższa", "PIT", 0.12, "Stawka PIT na skali podatkowej do progu."),
-    _rate("pit_rate_high", "PIT - stawka wyższa", "PIT", 0.32, "Stawka PIT na skali podatkowej powyżej progu."),
-    _amount("pit_threshold", "PIT - próg podatkowy", "PIT", 120000, "Dochód roczny, powyżej którego obowiązuje stawka wyższa.", 1_000_000),
-    _amount("pit_tax_free", "PIT - kwota wolna", "PIT", 30000, "Roczna kwota wolna od podatku.", 200_000),
-    _rate("pit_flat_rate", "PIT - podatek liniowy", "PIT", 0.19, "Stawka podatku liniowego."),
-    _rate("pit_lump_rate_default", "PIT - ryczałt (stawka domyślna)", "PIT", 0.12, "Domyślna stawka ryczałtu od przychodów ewidencjonowanych."),
-    _rate("vat_rate_standard", "VAT - stawka podstawowa", "VAT", 0.23, "Podstawowa stawka VAT."),
-    _rate("vat_rate_reduced1", "VAT - stawka obniżona I", "VAT", 0.08, "Pierwsza obniżona stawka VAT."),
-    _rate("vat_rate_reduced2", "VAT - stawka obniżona II", "VAT", 0.05, "Druga obniżona stawka VAT."),
-    _rate("cit_rate", "CIT - stawka podstawowa", "CIT", 0.19, "Podstawowa stawka CIT."),
-    _rate("cit_rate_small", "CIT - stawka dla małych podatników", "CIT", 0.09, "Preferencyjna stawka CIT dla małych podatników."),
+    _rate("pit_rate_low", "PIT - stawka niższa", "pit", 0.12, "Stawka PIT na skali podatkowej do progu."),
+    _rate("pit_rate_high", "PIT - stawka wyższa", "pit", 0.32, "Stawka PIT na skali podatkowej powyżej progu."),
+    _amount("pit_threshold", "PIT - próg podatkowy", "pit", 120000, "Dochód roczny, powyżej którego obowiązuje stawka wyższa.", 1_000_000),
+    _amount("pit_tax_free", "PIT - kwota wolna", "pit", 30000, "Roczna kwota wolna od podatku.", 200_000),
+    _rate("pit_flat_rate", "PIT - podatek liniowy", "pit", 0.19, "Stawka podatku liniowego."),
+    _rate("pit_lump_rate_default", "PIT - ryczałt (stawka domyślna)", "pit", 0.12, "Domyślna stawka ryczałtu od przychodów ewidencjonowanych."),
+    _rate("vat_rate_standard", "VAT - stawka podstawowa", "vat", 0.23, "Podstawowa stawka VAT."),
+    _rate("vat_rate_reduced1", "VAT - stawka obniżona I", "vat", 0.08, "Pierwsza obniżona stawka VAT."),
+    _rate("vat_rate_reduced2", "VAT - stawka obniżona II", "vat", 0.05, "Druga obniżona stawka VAT."),
+    _rate("cit_rate", "CIT - stawka podstawowa", "cit", 0.19, "Podstawowa stawka CIT."),
+    _rate("cit_rate_small", "CIT - stawka dla małych podatników", "cit", 0.09, "Preferencyjna stawka CIT dla małych podatników."),
 ]
 
 _BY_KEY = {p.key: p for p in PARAMETER_SCHEMA}

@@ -46,3 +46,23 @@ def test_get_parameters_endpoint_lists_all_keys():
     assert r.status_code == 200
     assert {p["key"] for p in r.json()} == set(EXPECTED)
     assert len(PARAMETER_SCHEMA) == len(EXPECTED)
+
+
+def test_contract_tax_values_lowercase_and_prefix_matches():
+    from app.model.params import schema_as_dicts
+
+    rows = TestClient(app).get("/parameters").json()
+    assert rows == schema_as_dicts()
+    assert {r["tax"] for r in rows} <= {"pit", "cit", "vat"}
+    for r in rows:
+        assert r["key"].startswith(r["tax"] + "_"), r
+
+
+def test_frontend_parameters_fixture_matches_backend_schema():
+    import json
+    from pathlib import Path
+
+    from app.model.params import schema_as_dicts
+
+    path = Path(__file__).resolve().parents[2] / "frontend" / "src" / "testdata" / "parameters.json"
+    assert json.loads(path.read_text(encoding="utf-8")) == schema_as_dicts(), "regenerate frontend/src/testdata/parameters.json from schema_as_dicts()"
