@@ -1,14 +1,14 @@
 import { useId, useRef, useState } from "react";
 import { downloadBlob } from "../export/download";
-import { deleteScenario, exportScenarios, importScenarios, listScenarios, saveScenario, MAX_NAME_LENGTH, type Scenario } from "../scenarios/store";
+import { deleteScenario, exportScenarios, importScenarios, listScenarios, sanitizeParams, saveScenario, MAX_NAME_LENGTH, type ParamLimits, type Scenario, type StoreResult } from "../scenarios/store";
 
 interface Props {
   params: Record<string, number>;
-  knownKeys: ReadonlySet<string>;
+  limits: ParamLimits;
   onLoad: (params: Record<string, number>) => void;
 }
 
-export function ScenarioBar({ params, knownKeys, onLoad }: Props) {
+export function ScenarioBar({ params, limits, onLoad }: Props) {
   const id = useId();
   const [scenarios, setScenarios] = useState<Scenario[]>(listScenarios);
   const [name, setName] = useState("");
@@ -23,30 +23,42 @@ export function ScenarioBar({ params, knownKeys, onLoad }: Props) {
     setError(msg);
   };
 
-  const onSave = () => {
-    const r = saveScenario(name, params);
-    if (!r.ok) return fail(r.error);
-    setError(null);
-    setInfo(`Zapisano scenariusz „${name.trim()}”.`);
-    setSelected(name.trim());
-    setName("");
+  /** Porażka albo ostrzeżenie o braku trwałego zapisu -> alert; w przeciwnym razie komunikat informacyjny. */
+  const settle = (r: StoreResult, okMessage: string): boolean => {
     refresh();
+    if (!r.ok) {
+      fail(r.error);
+      return false;
+    }
+    if (r.warning) {
+      fail(r.warning);
+      return true;
+    }
+    setError(null);
+    setInfo(okMessage);
+    return true;
+  };
+
+  const onSave = () => {
+    const trimmed = name.trim();
+    if (settle(saveScenario(name, params), `Zapisano scenariusz „${trimmed}”.`)) {
+      setSelected(trimmed);
+      setName("");
+    }
   };
 
   const onDelete = () => {
-    deleteScenario(selected);
-    setError(null);
-    setInfo(`Usunięto scenariusz „${selected}”.`);
+    settle(deleteScenario(selected), `Usunięto scenariusz „${selected}”.`);
     setSelected("");
-    refresh();
   };
 
   const onLoadClick = () => {
     const s = scenarios.find((x) => x.name === selected);
     if (!s) return;
+    const clean = sanitizeParams(s.params, limits);
     setError(null);
-    setInfo(`Wczytano scenariusz „${s.name}”.`);
-    onLoad(s.params);
+    setInfo(`Wczytano scenariusz „${s.name}”.${clean.notes.length ? ` Uwaga: ${clean.notes.join("; ")}.` : ""}`);
+    onLoad(clean.params);
   };
 
   const onExport = () => {
@@ -61,11 +73,7 @@ export function ScenarioBar({ params, knownKeys, onLoad }: Props) {
     } catch {
       return fail("Nie udało się odczytać pliku.");
     }
-    const r = importScenarios(text, knownKeys);
-    if (!r.ok) return fail(r.error);
-    setError(null);
-    setInfo("Zaimportowano scenariusze.");
-    refresh();
+    settle(importScenarios(text, new Set(limits.keys()), limits), "Zaimportowano scenariusze.");
   };
 
   return (

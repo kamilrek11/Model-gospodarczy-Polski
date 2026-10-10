@@ -48,11 +48,9 @@ export default function App() {
   const onChange = useCallback((key: string, value: number) => setOverrides((o) => ({ ...o, [key]: value })), []);
   const onReset = useCallback(() => setOverrides({}), []);
 
-  const knownKeys = useMemo(() => new Set((schema ?? []).map((p) => p.key)), [schema]);
-  const onLoadScenario = useCallback(
-    (params: Record<string, number>) => setOverrides(Object.fromEntries(Object.entries(params).filter(([k]) => knownKeys.has(k)))),
-    [knownKeys],
-  );
+  const limits = useMemo(() => new Map((schema ?? []).map((p) => [p.key, { min: p.min, max: p.max }])), [schema]);
+  // ScenarioBar przekazuje już oczyszczone parametry (nieznane klucze pominięte, wartości przycięte do min/max).
+  const onLoadScenario = useCallback((params: Record<string, number>) => setOverrides(params), []);
   const [tab, setTab] = useState<TabId>("sim");
   const resultsRef = useRef<HTMLDivElement>(null);
   const getCharts = useCallback(() => Array.from(resultsRef.current?.querySelectorAll(".chart-frame svg.recharts-surface") ?? []), []);
@@ -78,7 +76,7 @@ export default function App() {
         <aside className="sidebar" aria-label="Parametry">
           {loadError && <p role="alert">{loadError}</p>}
           {schema && <ParameterPanel schema={schema} values={values} onChange={onChange} onReset={onReset} />}
-          {schema && <ScenarioBar params={values} knownKeys={knownKeys} onLoad={onLoadScenario} />}
+          {schema && <ScenarioBar params={values} limits={limits} onLoad={onLoadScenario} />}
         </aside>
         <main className="content">
           <StatusBanner error={otherError?.kind === "invalid" ? null : otherError} status={refresh.status} updatedAt={updatedAt} onRefresh={refresh.start} />
@@ -107,7 +105,7 @@ export default function App() {
                 )}
               </>
             )}
-            {tab === "compare" && <CompareView />}
+            {tab === "compare" && <CompareView limits={limits} />}
             {tab === "quality" && <QualityTab sim={result} refreshKey={reloadKey} />}
           </div>
         </main>

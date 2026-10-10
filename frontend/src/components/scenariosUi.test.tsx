@@ -145,12 +145,12 @@ describe("ExportBar", () => {
 });
 
 describe("ScenarioBar", () => {
-  const known = new Set(["vat_rate"]);
+  const known = new Map([["vat_rate", { min: 0, max: 0.4 }]]);
 
   it("saves, loads and deletes a scenario", async () => {
     const onLoad = vi.fn();
     const user = userEvent.setup();
-    render(<ScenarioBar params={{ vat_rate: 0.21 }} knownKeys={known} onLoad={onLoad} />);
+    render(<ScenarioBar params={{ vat_rate: 0.21 }} limits={known} onLoad={onLoad} />);
     expect(screen.getByRole("button", { name: "Zapisz scenariusz" })).toBeDisabled();
     await user.type(screen.getByLabelText("Nazwa scenariusza"), "Niższy VAT");
     await user.click(screen.getByRole("button", { name: "Zapisz scenariusz" }));
@@ -161,20 +161,53 @@ describe("ScenarioBar", () => {
     expect(screen.queryByRole("option", { name: "Niższy VAT" })).toBeNull();
   });
 
+  it("shows the persistence warning instead of Zapisano when setItem fails", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("quota", "QuotaExceededError");
+    });
+    const user = userEvent.setup();
+    render(<ScenarioBar params={{ vat_rate: 0.21 }} limits={known} onLoad={vi.fn()} />);
+    await user.type(screen.getByLabelText("Nazwa scenariusza"), "A");
+    await user.click(screen.getByRole("button", { name: "Zapisz scenariusz" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Nie udało się zapisać w pamięci przeglądarki");
+    expect(screen.queryByText(/Zapisano/)).toBeNull();
+    expect(screen.getByRole("option", { name: "A" })).toBeInTheDocument();
+  });
+
+  it("rejects an out-of-range import with a Polish message", async () => {
+    render(<ScenarioBar params={{}} limits={known} onLoad={vi.fn()} />);
+    const file = new File(['{"version":1,"scenarios":[{"name":"A","params":{"vat_rate":1e308}}]}'], "s.json", { type: "application/json" });
+    await userEvent.setup().upload(screen.getByLabelText("Plik scenariuszy (JSON)"), file);
+    expect(await screen.findByRole("alert")).toHaveTextContent("vat_rate");
+  });
+
+  it("loading a stored scenario drops unknown keys and clamps values", async () => {
+    localStorage.setItem("symulator.scenarios.v1", JSON.stringify({ version: 1, scenarios: [{ name: "Stary", params: { vat_rate: 5, evil: 1 }, savedAt: "x" }] }));
+    const onLoad = vi.fn();
+    const user = userEvent.setup();
+    render(<ScenarioBar params={{}} limits={known} onLoad={onLoad} />);
+    await user.selectOptions(screen.getByLabelText("Zapisane scenariusze"), "Stary");
+    await user.click(screen.getByRole("button", { name: "Wczytaj" }));
+    expect(onLoad).toHaveBeenCalledWith({ vat_rate: 0.4 });
+    expect(screen.getByRole("status")).toHaveTextContent("evil");
+  });
+
   it("shows a Polish error in an alert for a bad import file", async () => {
-    render(<ScenarioBar params={{}} knownKeys={known} onLoad={vi.fn()} />);
+    render(<ScenarioBar params={{}} limits={known} onLoad={vi.fn()} />);
     const file = new File([JSON.stringify({ version: 1, scenarios: [{ name: "A", params: { evil: 1 } }] })], "s.json", { type: "application/json" });
     await userEvent.setup().upload(screen.getByLabelText("Plik scenariuszy (JSON)"), file);
     expect(await screen.findByRole("alert")).toHaveTextContent("nieznany parametr");
   });
 
   it("imports a valid file", async () => {
-    render(<ScenarioBar params={{}} knownKeys={known} onLoad={vi.fn()} />);
+    render(<ScenarioBar params={{}} limits={known} onLoad={vi.fn()} />);
     const file = new File([JSON.stringify({ version: 1, scenarios: [{ name: "Z pliku", params: { vat_rate: 0.2 } }] })], "s.json", { type: "application/json" });
     await userEvent.setup().upload(screen.getByLabelText("Plik scenariuszy (JSON)"), file);
     expect(await screen.findByRole("option", { name: "Z pliku" })).toBeInTheDocument();
   });
 });
+
+const known = new Map([["vat_rate", { min: 0, max: 0.4 }]]);
 
 describe("CompareView", () => {
   it("simulates both scenarios and shows a differences table", async () => {
@@ -184,7 +217,7 @@ describe("CompareView", () => {
     let n = 0;
     vi.stubGlobal("fetch", vi.fn(async () => json(n++ === 0 ? sim : other)));
     const user = userEvent.setup();
-    render(<CompareView />);
+    render(<CompareView limits={known} />);
     expect(screen.getByRole("button", { name: "Porównaj" })).toBeDisabled();
     await user.selectOptions(screen.getByLabelText("Scenariusz A"), "Bazowy");
     await user.selectOptions(screen.getByLabelText("Scenariusz B"), "Niższy");
@@ -195,8 +228,27 @@ describe("CompareView", () => {
     expect(table.textContent).not.toMatch(/NaN/);
   });
 
+  it("sends only sanitized params to /simulate", async () => {
+    localStorage.setItem(
+      "symulator.scenarios.v1",
+      JSON.stringify({ version: 1, scenarios: [{ name: "S1", params: { vat_rate: 9, evil: 1 }, savedAt: "x" }, { name: "S2", params: { vat_rate: 0.2 }, savedAt: "x" }] }),
+    );
+    const fetchMock = vi.fn(async () => json(sim));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<CompareView limits={known} />);
+    await user.selectOptions(screen.getByLabelText("Scenariusz A"), "S1");
+    await user.selectOptions(screen.getByLabelText("Scenariusz B"), "S2");
+    await user.click(screen.getByRole("button", { name: "Porównaj" }));
+    await screen.findByTestId("diff-table");
+    const bodies = fetchMock.mock.calls.map((c) => JSON.parse((c as unknown as [string, RequestInit])[1].body as string).params);
+    expect(bodies).toContainEqual({ vat_rate: 0.4 });
+    expect(bodies.every((p) => !("evil" in p))).toBe(true);
+    expect(screen.getByRole("status")).toHaveTextContent("evil");
+  });
+
   it("asks for at least two scenarios", () => {
-    render(<CompareView />);
+    render(<CompareView limits={known} />);
     expect(screen.getByText(/co najmniej dwa scenariusze/)).toBeInTheDocument();
   });
 });

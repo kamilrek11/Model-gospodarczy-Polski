@@ -16,13 +16,51 @@ export interface Scenario {
   savedAt: string;
 }
 
-export type StoreResult = { ok: true } | { ok: false; error: string };
+/** `warning` (po polsku) = operacja się udała tylko w pamięci karty, bez trwałego zapisu. */
+export type StoreResult = { ok: true; warning?: string } | { ok: false; error: string };
+
+export const PERSIST_WARNING =
+  "Nie udało się zapisać w pamięci przeglądarki – scenariusze są dostępne tylko do zamknięcia karty; użyj eksportu do pliku.";
+
+export interface ParamLimit {
+  min: number;
+  max: number;
+}
+export type ParamLimits = ReadonlyMap<string, ParamLimit>;
+
+/**
+ * Polityka wartości spoza schematu przy użyciu zapisanego scenariusza (np. starszy schemat,
+ * zmanipulowany localStorage): nieznane klucze są pomijane, wartości spoza [min, max] są
+ * przycinane do zakresu; każda zmiana trafia do `notes` (polski komunikat dla użytkownika).
+ * Import pliku jest natomiast odrzucany w całości, gdy wartość jest spoza zakresu.
+ */
+export function sanitizeParams(params: Record<string, number>, limits: ParamLimits): { params: Record<string, number>; notes: string[] } {
+  const out: Record<string, number> = {};
+  const notes: string[] = [];
+  for (const [k, v] of Object.entries(params)) {
+    const lim = limits.get(k);
+    if (!lim) {
+      notes.push(`pominięto nieznany parametr „${k}”`);
+    } else if (typeof v !== "number" || !Number.isFinite(v)) {
+      notes.push(`pominięto nieprawidłową wartość parametru „${k}”`);
+    } else if (v < lim.min || v > lim.max) {
+      out[k] = Math.min(lim.max, Math.max(lim.min, v));
+      notes.push(`wartość parametru „${k}” przycięto do zakresu ${lim.min}–${lim.max}`);
+    } else {
+      out[k] = v;
+    }
+  }
+  return { params: out, notes };
+}
 
 let memory: Scenario[] = [];
+/** Po nieudanym zapisie pamięć karty jest jedynym źródłem prawdy (inaczej zapis by "zniknął"). */
+let memoryAuthoritative = false;
 
 /** Czyści kopię w pamięci (testy). */
 export function resetScenarioStore(): void {
   memory = [];
+  memoryAuthoritative = false;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -36,7 +74,7 @@ function validName(name: unknown): string | null {
 }
 
 /** Wpis ze schematu albo null; `knownKeys` pominięte = bez kontroli kluczy. */
-function parseEntry(raw: unknown, knownKeys?: ReadonlySet<string>): { entry?: Scenario; error?: string } {
+function parseEntry(raw: unknown, knownKeys?: ReadonlySet<string>, ranges?: ParamLimits): { entry?: Scenario; error?: string } {
   if (!isRecord(raw)) return { error: "Scenariusz ma nieprawidłowy format." };
   const nameError = validName(raw.name);
   if (nameError) return { error: nameError };
@@ -46,6 +84,8 @@ function parseEntry(raw: unknown, knownKeys?: ReadonlySet<string>): { entry?: Sc
   for (const [k, v] of Object.entries(raw.params)) {
     if (k === "__proto__" || (knownKeys && !knownKeys.has(k))) return { error: `Scenariusz „${name}”: nieznany parametr „${k}”.` };
     if (typeof v !== "number" || !Number.isFinite(v)) return { error: `Scenariusz „${name}”: parametr „${k}” nie jest skończoną liczbą.` };
+    const lim = ranges?.get(k);
+    if (lim && (v < lim.min || v > lim.max)) return { error: `Scenariusz „${name}”: parametr „${k}” poza dozwolonym zakresem ${lim.min}–${lim.max}.` };
     params[k] = v;
   }
   const savedAt = typeof raw.savedAt === "string" && raw.savedAt.length <= 40 ? raw.savedAt : new Date().toISOString();
@@ -75,15 +115,18 @@ function readStored(): Scenario[] | null {
 }
 
 export function listScenarios(): Scenario[] {
-  return (readStored() ?? memory).map((s) => ({ ...s, params: { ...s.params } }));
+  return (memoryAuthoritative ? memory : (readStored() ?? memory)).map((s) => ({ ...s, params: { ...s.params } }));
 }
 
-function persist(list: Scenario[]): void {
+function persist(list: Scenario[]): StoreResult {
   memory = list;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: SCHEMA_VERSION, scenarios: list }));
+    memoryAuthoritative = false;
+    return { ok: true };
   } catch {
-    /* tylko pamięć */
+    memoryAuthoritative = true;
+    return { ok: true, warning: PERSIST_WARNING };
   }
 }
 
@@ -98,12 +141,11 @@ export function saveScenario(name: string, params: Record<string, number>): Stor
   if (i >= 0) list[i] = entry;
   else if (list.length >= MAX_SCENARIOS) return { ok: false, error: `Osiągnięto limit ${MAX_SCENARIOS} scenariuszy – usuń któryś.` };
   else list.push(entry);
-  persist(list);
-  return { ok: true };
+  return persist(list);
 }
 
-export function deleteScenario(name: string): void {
-  persist(listScenarios().filter((s) => s.name !== name));
+export function deleteScenario(name: string): StoreResult {
+  return persist(listScenarios().filter((s) => s.name !== name));
 }
 
 export function exportScenarios(): string {
@@ -114,7 +156,7 @@ export function exportScenarios(): string {
  * Wczytuje scenariusze z JSON-a (scalając je z istniejącymi; ta sama nazwa = nadpisanie).
  * Wszystko albo nic: przy pierwszym błędzie nic nie jest zapisywane.
  */
-export function importScenarios(json: string, knownKeys?: ReadonlySet<string>): StoreResult {
+export function importScenarios(json: string, knownKeys?: ReadonlySet<string>, ranges?: ParamLimits): StoreResult {
   try {
     if (typeof json !== "string") return { ok: false, error: "Nieprawidłowy plik scenariuszy." };
     if (new TextEncoder().encode(json).length > MAX_IMPORT_BYTES) return { ok: false, error: "Plik jest za duży (maks. 1 MB)." };
@@ -133,7 +175,7 @@ export function importScenarios(json: string, knownKeys?: ReadonlySet<string>): 
     const incoming: Scenario[] = [];
     const seen = new Set<string>();
     for (const raw of doc.scenarios) {
-      const { entry, error } = parseEntry(raw, knownKeys);
+      const { entry, error } = parseEntry(raw, knownKeys, ranges);
       if (!entry) return { ok: false, error: error ?? "Nieprawidłowy scenariusz." };
       if (seen.has(entry.name)) return { ok: false, error: `Powtórzona nazwa scenariusza „${entry.name}”.` };
       seen.add(entry.name);
@@ -141,8 +183,7 @@ export function importScenarios(json: string, knownKeys?: ReadonlySet<string>): 
     }
     const merged = listScenarios().filter((s) => !seen.has(s.name)).concat(incoming);
     if (merged.length > MAX_SCENARIOS) return { ok: false, error: `Po imporcie przekroczono limit ${MAX_SCENARIOS} scenariuszy.` };
-    persist(merged);
-    return { ok: true };
+    return persist(merged);
   } catch {
     return { ok: false, error: "Nie udało się wczytać scenariuszy." };
   }

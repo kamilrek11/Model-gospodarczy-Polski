@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { compare } from "./compare";
-import { MAX_NAME_LENGTH, MAX_SCENARIOS, deleteScenario, exportScenarios, importScenarios, listScenarios, resetScenarioStore, saveScenario } from "./store";
+import { PERSIST_WARNING, sanitizeParams, MAX_NAME_LENGTH, MAX_SCENARIOS, deleteScenario, exportScenarios, importScenarios, listScenarios, resetScenarioStore, saveScenario } from "./store";
 import { sim } from "../testFixtures";
 
 const KNOWN = new Set(["vat_rate", "cit_rate"]);
@@ -48,7 +48,7 @@ describe("scenario store", () => {
     expect(() => saveScenario("A", { vat_rate: 0.2 })).not.toThrow();
     expect(listScenarios().map((s) => s.name)).toEqual(["A"]);
     expect(() => exportScenarios()).not.toThrow();
-    expect(importScenarios(doc([entry("B")]), KNOWN)).toEqual({ ok: true });
+    expect(importScenarios(doc([entry("B")]), KNOWN)).toMatchObject({ ok: true, warning: PERSIST_WARNING });
     expect(listScenarios().map((s) => s.name).sort()).toEqual(["A", "B"]);
     expect(() => deleteScenario("A")).not.toThrow();
   });
@@ -59,6 +59,58 @@ describe("scenario store", () => {
     localStorage.setItem("symulator.scenarios.v1", JSON.stringify({ version: 1, scenarios: [{ name: 5 }, null, entry("ok")] }));
     expect(listScenarios().map((s) => s.name)).toEqual(["ok"]);
     expect(saveScenario("nowy", {})).toEqual({ ok: true });
+  });
+});
+
+describe("persist failures with a working getItem", () => {
+  const quota = () =>
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("quota", "QuotaExceededError");
+    });
+
+  it("keeps the saved scenario listed and returns a warning", () => {
+    quota();
+    const r = saveScenario("A", { vat_rate: 0.2 });
+    expect(r).toEqual({ ok: true, warning: PERSIST_WARNING });
+    expect(listScenarios().map((s) => s.name)).toEqual(["A"]);
+    expect(saveScenario("B", {})).toMatchObject({ warning: PERSIST_WARNING });
+    expect(listScenarios().map((s) => s.name)).toEqual(["A", "B"]);
+  });
+
+  it("delete and import also warn and stay consistent", () => {
+    saveScenario("A", {});
+    saveScenario("B", {});
+    quota();
+    expect(deleteScenario("A")).toMatchObject({ ok: true, warning: PERSIST_WARNING });
+    expect(listScenarios().map((s) => s.name)).toEqual(["B"]);
+    expect(importScenarios(doc([entry("C")]), KNOWN)).toMatchObject({ ok: true, warning: PERSIST_WARNING });
+    expect(listScenarios().map((s) => s.name)).toEqual(["B", "C"]);
+  });
+
+  it("returns to normal persistence after a successful write", () => {
+    const spy = quota();
+    saveScenario("A", {});
+    spy.mockRestore();
+    expect(saveScenario("B", {})).toEqual({ ok: true });
+    expect(listScenarios().map((s) => s.name)).toEqual(["A", "B"]);
+  });
+});
+
+describe("parameter ranges", () => {
+  const LIMITS = new Map([["vat_rate", { min: 0, max: 0.4 }]]);
+
+  it("import with 1e308 is rejected naming the key", () => {
+    const r = importScenarios('{"version":1,"scenarios":[{"name":"A","params":{"vat_rate":1e308}}]}', KNOWN, LIMITS);
+    expect(r).toMatchObject({ ok: false });
+    expect((r as { error: string }).error).toContain("vat_rate");
+    expect(listScenarios()).toEqual([]);
+  });
+
+  it("sanitizeParams drops unknown keys and clamps out-of-range values with notes", () => {
+    const { params, notes } = sanitizeParams({ vat_rate: 9, evil: 1, x: NaN }, LIMITS);
+    expect(params).toEqual({ vat_rate: 0.4 });
+    expect(notes).toHaveLength(3);
+    expect(notes.join(" ")).toContain("evil");
   });
 });
 

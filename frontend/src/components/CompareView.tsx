@@ -6,7 +6,7 @@ import { ChartFrame } from "../charts/ChartFrame";
 import { INK, TAX_LABEL, TAX_ORDER } from "../charts/palette";
 import { fmtAxis, fmtMld, fmtPct, fmtSignedMld } from "../format";
 import { compare } from "../scenarios/compare";
-import { listScenarios } from "../scenarios/store";
+import { listScenarios, sanitizeParams, type ParamLimits } from "../scenarios/store";
 
 const SEED = 1; // wspólne losowania dla obu scenariuszy – różnice pochodzą z parametrów
 
@@ -15,7 +15,7 @@ interface Pair {
   b: { name: string; result: SimulationResult };
 }
 
-export function CompareView() {
+export function CompareView({ limits }: { limits: ParamLimits }) {
   const id = useId();
   const scenarios = useMemo(listScenarios, []);
   const [nameA, setNameA] = useState("");
@@ -23,18 +23,23 @@ export function CompareView() {
   const [pair, setPair] = useState<Pair | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string[]>([]);
   const [tax, setTax] = useState<TaxKey>("pit");
 
   const run = async () => {
     const sa = scenarios.find((s) => s.name === nameA);
     const sb = scenarios.find((s) => s.name === nameB);
     if (!sa || !sb) return;
+    // Zapisane dane mogą być spoza schematu: nieznane klucze pomijamy, wartości przycinamy (jak przy wczytaniu).
+    const ca = sanitizeParams(sa.params, limits);
+    const cb = sanitizeParams(sb.params, limits);
+    setNotes([...ca.notes.map((n) => `${sa.name}: ${n}`), ...cb.notes.map((n) => `${sb.name}: ${n}`)]);
     setLoading(true);
     setError(null);
     try {
       const [ra, rb] = await Promise.all([
-        simulate({ params: sa.params, horizon: 5, n_paths: 1000, seed: SEED }),
-        simulate({ params: sb.params, horizon: 5, n_paths: 1000, seed: SEED }),
+        simulate({ params: ca.params, horizon: 5, n_paths: 1000, seed: SEED }),
+        simulate({ params: cb.params, horizon: 5, n_paths: 1000, seed: SEED }),
       ]);
       setPair({ a: { name: sa.name, result: ra }, b: { name: sb.name, result: rb } });
     } catch (e) {
@@ -79,6 +84,11 @@ export function CompareView() {
               {loading ? "Obliczanie…" : "Porównaj"}
             </button>
           </div>
+        )}
+        {notes.length > 0 && (
+          <p className="note" role="status">
+            Uwaga: {notes.join("; ")}.
+          </p>
         )}
         {error && <p role="alert">{error}</p>}
       </section>
