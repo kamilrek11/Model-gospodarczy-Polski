@@ -130,9 +130,20 @@ def validate_dataset(series: dict[str, pd.DataFrame]) -> list[str]:
                 f"[{lo:g}; {hi:g}] mld zł – prawdopodobny błąd jednostek."
             )
 
-    # (d) BDL vs Eurostat gross operating surplus agree on overlapping years
+    # (d) BDL vs Eurostat gross operating surplus agree on overlapping years; the BDL series is required
+    # and the Eurostat years appended after it (assemble) must continue it without a gap
     bdl, eu = _values(series, "gross_surplus"), _values(series, EUROSTAT_SURPLUS)
+    if bdl is None:
+        out.append("Brak serii gross_surplus (nadwyżka operacyjna brutto, GUS BDL) – wymagana do modułu CIT.")
     if bdl is not None and eu is not None:
+        later = [int(y) for y in eu.index if y > bdl.index.max()]
+        if later:
+            gaps = sorted(set(range(int(bdl.index.max()) + 1, later[-1] + 1)) - set(later))
+            if gaps:
+                out.append(
+                    f"Nadwyżka operacyjna brutto (gross_surplus): po ostatnim roku GUS BDL ({int(bdl.index.max())}) "
+                    f"brakuje w Eurostacie lat {_years(gaps)} – przedłużona seria miałaby lukę."
+                )
         both = pd.concat([bdl.rename("bdl"), eu.rename("eu")], axis=1, join="inner").dropna()
         both = both[both["eu"] > 0]
         if both.empty:
@@ -184,7 +195,8 @@ def assemble(results: dict[str, pd.DataFrame]) -> dict[str, tuple[str, pd.DataFr
     bdl, eu = _values(results, "gross_surplus"), _values(results, EUROSTAT_SURPLUS)
     if eu is not None:
         if bdl is None:
-            # never reached after validate_dataset (gate (d) needs both); keep the source honest anyway
+            # not stored after a refresh (gate (d) rejects a missing BDL series); for direct callers the
+            # Eurostat-only series is still labelled with its real source
             out["gross_surplus"] = ("eurostat", _frame(eu))
         else:
             later = eu[eu.index > bdl.index.max()]

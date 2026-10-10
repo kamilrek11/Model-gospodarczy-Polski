@@ -134,3 +134,19 @@ def test_validate_flags_nan_and_negative_amounts():
     violations = validate_dataset(res)
     assert any("rev_vat" in v and "2018" in v and "brak wartości" in v for v in violations)
     assert any("gross_surplus" in v and "2010" in v and "ujemn" in v for v in violations)
+
+
+def test_validate_flags_gap_in_spliced_gross_surplus():
+    res = real_results()
+    res["gross_surplus_eurostat"] = res["gross_surplus_eurostat"].drop(index=2024)  # BDL to 2023, Eurostat 2025 only
+    violations = validate_dataset(res)
+    assert len(violations) == 1, violations
+    assert "gross_surplus" in violations[0] and "2024" in violations[0]
+
+
+def test_validate_flags_missing_bdl_gross_surplus():
+    res = real_results()
+    del res["gross_surplus"]
+    violations = validate_dataset(res)
+    assert len(violations) == 1, violations
+    assert "gross_surplus" in violations[0] and "GUS BDL" in violations[0]

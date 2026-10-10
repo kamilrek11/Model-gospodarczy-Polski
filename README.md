@@ -90,7 +90,7 @@ dobrego stanu. Źródła (szczegóły, identyfikatory i pułapki: `docs/data-sou
 
 Bramki jakości (`backend/app/data/dataset.py`): ≥ 15 ciągłych wspólnych lat zmiennych makro; konsumpcja / PKB nominalny
 w [0,4; 0,7] (wyłapuje błąd mln/mld); ostatnie wpływy VAT/CIT/PIT w wiarygodnych przedziałach; nadwyżka operacyjna GUS i
-Eurostatu zgodna co do 2% w latach wspólnych; brak NaN i wartości ujemnych; serie wpływów nie kończą się wcześniej niż
+Eurostatu zgodna co do 2% w latach wspólnych, seria GUS BDL obecna, a dołączone lata Eurostatu bez luki; brak NaN i wartości ujemnych; serie wpływów nie kończą się wcześniej niż
 już zapisane (poza danymi syntetycznymi).
 
 Zmienne środowiskowe backendu:
