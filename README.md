@@ -21,7 +21,9 @@ Baza SQLite leży w nazwanym wolumenie `budget-data` (`/data/budget.db`). Health
 
 ```bash
 # backend
-cd backend && python -m venv .venv && .venv/bin/pip install -e . 2>/dev/null || .venv/bin/pip install fastapi uvicorn pandas numpy statsmodels httpx openpyxl pytest
+cd backend && python -m venv .venv
+# zależności przypięte w pyproject.toml (projekt nie jest instalowalnym pakietem): runtime + grupa dev (pytest)
+.venv/bin/pip install $(.venv/bin/python -c "import tomllib;p=tomllib.load(open('pyproject.toml','rb'))['project'];print(' '.join(p['dependencies']+p['optional-dependencies']['dev']))")
 .venv/bin/python -m uvicorn app.main:app --port 8000      # baza: $BUDGET_DB_PATH (domyślnie backend/var/budget.db)
 # frontend (proxy /api -> localhost:8000)
 cd frontend && npm ci && npm run dev

@@ -2,15 +2,21 @@
 name = "budget-simulator"
 version = "0.1.0"
 requires-python = ">=3.13"
+# Exact pins (versions of the verified dev venv). The project is not an installable package;
+# Dockerfile and README install these lists directly (runtime: dependencies, tests: + dev).
 dependencies = [
-    "fastapi",
-    "uvicorn",
-    "pandas",
-    "numpy",
-    "statsmodels",
-    "httpx",
-    "openpyxl",
-    "pytest",
+    "fastapi==0.143.0",
+    "uvicorn==0.54.0",
+    "pandas==3.0.6",
+    "numpy==2.5.3",
+    "statsmodels==0.15.0",
+    "httpx==0.28.1",
+    "openpyxl==3.1.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
 ]
 
 [tool.pytest.ini_options]
