@@ -34,6 +34,21 @@ describe("StatusBanner", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("09.10.2026");
   });
 
+  it("renders identical warnings without React key collisions", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(
+      <StatusBanner
+        error={null}
+        status={{ state: "done", errors: {}, warnings: ["mf_execution: 2015: x", "mf_execution: 2015: x"], updated_at: null }}
+        updatedAt={null}
+        onRefresh={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByText("mf_execution: 2015: x")).toHaveLength(2);
+    expect(err.mock.calls.some((c) => String(c[0]).includes("same key"))).toBe(false);
+    err.mockRestore();
+  });
+
   it("lists source warnings of the last refresh without an error", () => {
     render(
       <StatusBanner

@@ -115,6 +115,23 @@ describe("useRefresh polling", () => {
     expect(statusCalls(calls)).toBe(n); // no polling: no job was started
   });
 
+  it("a 403 with another detail (e.g. a proxy) is a failure, not 'refresh disabled'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        init?.method === "POST"
+          ? new Response("<html>403 Forbidden</html>", { status: 403 })
+          : new Response(JSON.stringify({ state: "idle", errors: {}, updated_at: null }), { status: 200 }),
+      ),
+    );
+    const { result } = renderHook(() => useRefresh(vi.fn()));
+    await act(async () => {});
+    await act(async () => result.current.start());
+    expect(result.current.status?.state).toBe("failed");
+    expect(result.current.status?.disabled).not.toBe(true);
+    expect(result.current.status?.errors.refresh).toContain("403");
+  });
+
   it("two synchronous start() calls send exactly one POST", async () => {
     const calls = mockFetch([{ state: "idle" }, { state: "running" }]);
     const { result } = renderHook(() => useRefresh(vi.fn()));

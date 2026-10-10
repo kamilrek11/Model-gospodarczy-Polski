@@ -55,8 +55,9 @@ export function StatusBanner({ error, status, updatedAt, onRefresh }: Props) {
             {!alarm && <strong>Uwagi do danych z ostatniego odświeżenia:</strong>}
             {alarm && <span> Uwagi do danych z ostatniego odświeżenia:</span>}
             <ul>
-              {warnings.map((w) => (
-                <li key={w}>{w}</li>
+              {warnings.map((w, i) => (
+                // statyczna lista z jednej odpowiedzi; teksty mogą się powtarzać, więc kluczem jest pozycja
+                <li key={i}>{w}</li>
               ))}
             </ul>
           </>
