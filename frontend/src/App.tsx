@@ -105,7 +105,7 @@ export default function App() {
                 )}
               </>
             )}
-            {tab === "compare" && <CompareView limits={limits} />}
+            {tab === "compare" && schema && <CompareView limits={limits} />}
             {tab === "quality" && <QualityTab sim={result} refreshKey={reloadKey} />}
           </div>
         </main>

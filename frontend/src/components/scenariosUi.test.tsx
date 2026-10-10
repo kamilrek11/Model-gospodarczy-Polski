@@ -275,4 +275,26 @@ describe("App integration", () => {
     expect(await screen.findByText("Backtest modelu")).toBeInTheDocument();
     expect(await screen.findByText("3,0%")).toBeInTheDocument();
   });
+  it("renders CompareView only after the parameter schema has loaded", async () => {
+    const params = [{ key: "vat_rate", label: "Stawka VAT", tax: "vat", unit: "ułamek", default: 0.23, min: 0, max: 0.4, step: 0.01, description: "x" }];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.endsWith("/parameters")) {
+          await gate;
+          return json(params);
+        }
+        if (url.endsWith("/refresh/status")) return json({ state: "idle", errors: {}, updated_at: null });
+        if (url.endsWith("/history")) return json({ pit: [{ year: 2025, value: 100 }] });
+        return json(sim);
+      }),
+    );
+    render(<App />);
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Porównanie scenariuszy" }));
+    expect(screen.queryByRole("heading", { name: "Porównanie scenariuszy" })).not.toBeInTheDocument();
+    release();
+    expect(await screen.findByRole("heading", { name: "Porównanie scenariuszy" })).toBeInTheDocument();
+  });
 });
