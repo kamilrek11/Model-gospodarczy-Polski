@@ -150,10 +150,20 @@ def test_refresh_rejects_concurrent_run(api):
     assert client.post("/refresh").status_code == 409
 
 
-def test_default_clients_fail_on_unmapped_series(tmp_path):
-    """Default factory (real clients, unverified ids) must fail cleanly, without touching the network."""
+def test_real_clients_fail_cleanly_offline(tmp_path):
+    """Real client classes with an injected failing transport: errors surface per source, no network."""
+    import httpx
+
+    from app.data.execution import ExecutionClient, HttpJsonLoader
+    from app.data.gus_bdl import GusBdlClient
+
+    def clients():
+        http = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(503)))
+        return [GusBdlClient("https://bdl.test/api/v1", http, sleep=lambda s: None), ExecutionClient(HttpJsonLoader())]
+
     store_path = str(tmp_path / "default.db")
     app.dependency_overrides[get_store] = lambda: Store(store_path)
+    app.dependency_overrides[get_clients] = clients
     job = RefreshJob()
     app.dependency_overrides[get_job] = lambda: job
     try:
@@ -163,7 +173,7 @@ def test_default_clients_fail_on_unmapped_series(tmp_path):
     finally:
         app.dependency_overrides.clear()
     assert status["state"] == "failed"
-    assert "not mapped" in status["errors"]["gus_bdl"]
+    assert "503" in status["errors"]["gus_bdl"]
     assert "not mapped" in status["errors"]["execution"]
     assert Store(store_path).load_model() is None
 

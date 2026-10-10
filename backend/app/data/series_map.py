@@ -1,20 +1,23 @@
 """Series-name -> source identifiers.
 
-ALL entries are unverified: the sandbox had no access to bdl.stat.gov.pl / MF / ZUS.
-Sentinels starting with TODO_VERIFY make clients raise SourceError("series not mapped").
+BDL ids are verified against the live API (docs/data-sources-discovery.md, 2026-10-10).
+The execution (MF) endpoints are still unverified placeholders: sentinels starting with
+TODO_VERIFY make that client raise SourceError("series not mapped").
 """
 
 UNVERIFIED_PREFIX = "TODO_VERIFY"
 
-# PLACEHOLDER-UNVERIFIED: confirm against live API
-BDL_SERIES: dict[str, dict] = {
-    "pkb_real": {"var_id": "TODO_VERIFY_PKB_REAL", "unit": "Polska"},  # PLACEHOLDER-UNVERIFIED: confirm against live API
-    "employment": {"var_id": "TODO_VERIFY_EMPLOYMENT", "unit": "Polska"},  # PLACEHOLDER-UNVERIFIED: confirm against live API
-    "wage_nominal": {"var_id": "TODO_VERIFY_WAGE_NOMINAL", "unit": "Polska"},  # PLACEHOLDER-UNVERIFIED: confirm against live API
-    "cpi": {"var_id": "TODO_VERIFY_CPI", "unit": "Polska"},  # PLACEHOLDER-UNVERIFIED: confirm against live API
-    "consumption_nominal": {"var_id": "TODO_VERIFY_CONSUMPTION", "unit": "Polska"},  # PLACEHOLDER-UNVERIFIED: confirm against live API
-    "gross_surplus": {"var_id": "TODO_VERIFY_GROSS_SURPLUS", "unit": "Polska"},  # PLACEHOLDER-UNVERIFIED: confirm against live API
+# BDL variable ids. The national unit is requested with `unit-level=0` and must be
+# id "000000000000" (name "POLSKA").
+BDL_SERIES: dict[str, str] = {
+    "pkb_growth": "458431",  # GDP real, previous year = 100 (index)
+    "gdp_nominal": "458271",  # mln zl
+    "employment": "154173",  # average paid employment (etaty)
+    "wage_nominal": "64428",  # zl / month, gross
+    "cpi_growth": "217230",  # CPI, previous year = 100 (index)
+    "gross_surplus": "458419",  # mln zl
 }
+BDL_NATIONAL_UNIT_ID = "000000000000"
 
 # PLACEHOLDER-UNVERIFIED: confirm against live API (values in mld zl)
 EXECUTION_ENDPOINTS: dict[str, str] = {

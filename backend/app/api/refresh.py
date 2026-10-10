@@ -104,9 +104,9 @@ def get_store() -> Store:
 
 
 def get_clients() -> list[SourceClient]:
-    # With the unverified series map both clients raise SourceError("series not mapped") before any request.
+    # The execution client is still mapped to unverified placeholders (raises "series not mapped").
     return [
-        GusBdlClient(BDL_BASE_URL, httpx.Client(timeout=30)),
+        GusBdlClient(BDL_BASE_URL, httpx.Client(timeout=30), client_id=os.environ.get("BDL_CLIENT_ID") or None),
         ExecutionClient(HttpJsonLoader()),
     ]
 
