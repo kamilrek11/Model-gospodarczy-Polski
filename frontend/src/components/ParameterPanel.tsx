@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ParamSpec, TaxKey } from "../api/types";
 
 export const TAX_TITLES: Record<TaxKey, string> = {
@@ -23,15 +23,23 @@ interface Props {
 }
 
 export function ParameterPanel({ schema, values, onChange, onReset }: Props) {
+  const [resetKey, setResetKey] = useState(0);
   return (
     <div className="parameter-panel">
-      <button type="button" className="reset-all" onClick={onReset}>
+      <button
+        type="button"
+        className="reset-all"
+        onClick={() => {
+          setResetKey((k) => k + 1);
+          onReset();
+        }}
+      >
         Przywróć wszystko
       </button>
       {TAX_ORDER.map((tax) => {
         const specs = schema.filter((s) => s.tax === tax);
         if (specs.length === 0) return null;
-        return <TaxSection key={tax} tax={tax} specs={specs} values={values} onChange={onChange} />;
+        return <TaxSection key={tax} tax={tax} specs={specs} values={values} onChange={onChange} resetKey={resetKey} />;
       })}
     </div>
   );
@@ -42,13 +50,14 @@ function TaxSection({
   specs,
   values,
   onChange,
-}: { tax: TaxKey; specs: ParamSpec[] } & Pick<Props, "values" | "onChange">) {
+  resetKey,
+}: { tax: TaxKey; specs: ParamSpec[]; resetKey: number } & Pick<Props, "values" | "onChange">) {
   const headingId = useId();
   return (
     <details open role="group" aria-labelledby={headingId} className="tax-section">
       <summary id={headingId}>{TAX_TITLES[tax]}</summary>
       {specs.map((s) => (
-        <ParamRow key={s.key} spec={s} value={values[s.key] ?? s.default} onChange={onChange} />
+        <ParamRow key={s.key} spec={s} value={values[s.key] ?? s.default} onChange={onChange} resetKey={resetKey} />
       ))}
     </details>
   );
@@ -58,10 +67,12 @@ function ParamRow({
   spec,
   value,
   onChange,
+  resetKey,
 }: {
   spec: ParamSpec;
   value: number;
   onChange: Props["onChange"];
+  resetKey: number;
 }) {
   const id = useId();
   const descId = `${id}-desc`;
@@ -78,6 +89,15 @@ function ParamRow({
     setText((t) => (fromDisplay(spec, Number(t)) === value ? t : String(toDisplay(spec, value))));
     setError(null);
   }, [value, spec]);
+
+  // "Przywróć wszystko": wyczyść lokalny tekst i błąd także gdy wartość się nie zmienia.
+  const lastReset = useRef(resetKey);
+  useEffect(() => {
+    if (lastReset.current === resetKey) return;
+    lastReset.current = resetKey;
+    setText(String(toDisplay(spec, spec.default)));
+    setError(null);
+  }, [resetKey, spec]);
 
   function handleText(raw: string) {
     setText(raw);
@@ -133,7 +153,7 @@ function ParamRow({
             onChange(spec.key, fromDisplay(spec, n));
           }}
         />
-        <button type="button" onClick={restore} disabled={!deviates} aria-label={`Przywróć ${spec.label}`}>
+        <button type="button" onClick={restore} disabled={!deviates && error === null} aria-label={`Przywróć ${spec.label}`}>
           Przywróć
         </button>
       </div>

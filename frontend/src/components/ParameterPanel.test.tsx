@@ -67,4 +67,28 @@ describe("ParameterPanel", () => {
     expect(within(sec).getByText(/Stawka podstawowa VAT/)).toBeInTheDocument();
     expect(within(sec).getByText(/Baza: 23%/)).toBeInTheDocument();
   });
+
+  it("per-parameter reset clears stale invalid text at default", async () => {
+    const { onChange } = setup();
+    const input = screen.getByLabelText("Stawka CIT");
+    await userEvent.clear(input);
+    await userEvent.type(input, "80");
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Przywróć Stawka CIT" }));
+    expect(input).toHaveValue("19");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalledWith("cit_rate", 0.8);
+  });
+
+  it("reset all clears stale invalid text at default", async () => {
+    const { onChange, onReset } = setup();
+    const input = screen.getByLabelText("Stawka CIT");
+    await userEvent.clear(input);
+    await userEvent.type(input, "80");
+    await userEvent.click(screen.getByRole("button", { name: "Przywróć wszystko" }));
+    expect(onReset).toHaveBeenCalled();
+    expect(input).toHaveValue("19");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalledWith("cit_rate", 0.8);
+  });
 });

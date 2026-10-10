@@ -124,10 +124,20 @@ describe("useSimulation", () => {
   });
 
   it("does not set state when aborted request rejects", async () => {
+    const rejections: Promise<unknown>[] = [];
+    const resolvers: Array<(r: Response) => void> = [];
+    let call = 0;
     const fetchMock = vi.fn((_u: string, init?: RequestInit) => {
-      return new Promise<Response>((_res, rej) => {
-        init!.signal!.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
-      });
+      const n = call++;
+      if (n === 0) {
+        // rejects with AbortError only once the request is aborted (params changed)
+        const p = new Promise<Response>((_res, rej) => {
+          init!.signal!.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+        });
+        rejections.push(p.catch((e) => e));
+        return p;
+      }
+      return new Promise<Response>((res) => resolvers.push(res));
     });
     vi.stubGlobal("fetch", fetchMock);
     const { rerender, result } = renderHook(({ p }) => useSimulation(p), {
@@ -136,10 +146,26 @@ describe("useSimulation", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(300);
     });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     rerender({ p: { a: 2 } });
     await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // the first request really rejected with AbortError
+    const err = await rejections[0];
+    expect(err).toBeInstanceOf(DOMException);
+    expect((err as DOMException).name).toBe("AbortError");
+    // stale rejection must not leak into state: no error, new request still loading
+    expect(result.current.error).toBeNull();
+    expect(result.current.loading).toBe(true);
+    expect(result.current.result).toBeNull();
+    await act(async () => {
+      resolvers[0](new Response(JSON.stringify({ ...okBody, model_version: "fresh" }), { status: 200 }));
       await vi.advanceTimersByTimeAsync(0);
     });
+    expect(result.current.result?.model_version).toBe("fresh");
+    expect(result.current.loading).toBe(false);
     expect(result.current.error).toBeNull();
   });
 });
