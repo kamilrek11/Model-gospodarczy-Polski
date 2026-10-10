@@ -7,8 +7,11 @@ import type { TaxKey } from "../api/types";
  * zdefiniowane jako zmienne CSS w styles.css (:root, @media dark, [data-theme="dark"]),
  * dzięki czemu przełącznik motywu (Task 10) nie wymaga zmian w kodzie wykresów.
  *
- * Jasny slot 3 ma kontrast < 3:1 na jasnym tle, więc tożsamość serii nigdy nie
- * opiera się wyłącznie na kolorze: legenda z etykietami + tabela danych.
+ * Jasny slot 3 to krok #199e70 (zamiast referencyjnego #1baf7a, ~2,7:1), aby uzyskać
+ * kontrast >= 3:1 na jasnym tle; zestaw zweryfikowany validate_palette.js --pairs all
+ * w trybie jasnym (CVD ΔE 8,4; normalny wzrok ΔE 21,6; kontrast >= 3:1) – test
+ * contrast.test.ts pilnuje kontrastu. Tożsamość serii i tak nie opiera się wyłącznie
+ * na kolorze: legenda z etykietami + tabela danych.
  */
 export const TAX_COLOR: Record<TaxKey, string> = {
   pit: "var(--series-1)",

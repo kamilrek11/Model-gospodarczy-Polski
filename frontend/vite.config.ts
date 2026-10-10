@@ -22,5 +22,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/setupTests.ts"],
+    // styles.css is read as text (?raw) by the colour-contrast test; other CSS stays stubbed.
+    css: { include: [/styles\.css/] },
   },
 });

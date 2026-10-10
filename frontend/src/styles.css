@@ -27,7 +27,7 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
   --grid: #dcdbd6;
   --series-1: #2a78d6;
   --series-2: #eb6834;
-  --series-3: #1baf7a;
+  --series-3: #199e70; /* aqua stepped down from #1baf7a (2.7:1) to reach >= 3:1 on --surface-1 */
   --page-bg: #fafafa;
   --accent: #0b3d6e;
   --focus: #0b3d6e;
