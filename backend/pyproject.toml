@@ -1,0 +1,18 @@
+[project]
+name = "budget-simulator"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pandas",
+    "numpy",
+    "statsmodels",
+    "httpx",
+    "openpyxl",
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
