@@ -5,7 +5,7 @@ import App from "../App";
 import { POLL_MS } from "../state/useRefresh";
 import { history, sim } from "../testFixtures";
 import { BudgetStack } from "./BudgetStack";
-import { buildForecastSeries, buildStackRows, changeVsBaseline } from "./data";
+import { bridgeForecast, buildForecastSeries, buildStackRows, changeVsBaseline } from "./data";
 import { ForecastVsActual } from "./ForecastVsActual";
 
 describe("data transformations", () => {
@@ -33,6 +33,54 @@ describe("data transformations", () => {
     expect(rows.map((r) => r.year)).toEqual([2023, 2024, 2025, 2026, 2027]);
     expect(rows[2]).toEqual({ year: 2025, forecast: false, pit: 100, vat: 300 });
     expect(rows[3]).toEqual({ year: 2026, forecast: true, pit: 100, vat: 310 });
+  });
+});
+
+describe("year overlap and gaps", () => {
+  const overlapHistory = { ...history, pit: [...history.pit!, { year: 2026, value: 101 }] };
+  const gapSim = { ...sim, years: [2028, 2029] };
+
+  it("buildForecastSeries keeps one row per year; overlap row has actual and median", () => {
+    const rows = buildForecastSeries(overlapHistory, sim, "pit");
+    expect(rows.map((r) => r.year)).toEqual([2023, 2024, 2025, 2026, 2027]);
+    expect(rows[3]).toMatchObject({ year: 2026, actual: 101, median: 100, forecast: true });
+  });
+
+  it("buildForecastSeries leaves gap years out without NaN", () => {
+    const rows = buildForecastSeries(history, gapSim, "pit");
+    expect(rows.map((r) => r.year)).toEqual([2023, 2024, 2025, 2028, 2029]);
+    expect(JSON.stringify(rows)).not.toMatch(/NaN|null/);
+    const bridged = bridgeForecast(rows);
+    expect(bridged[2]).toMatchObject({ year: 2025, actual: 100, median: 100 });
+  });
+
+  it("bridgeForecast does nothing for an overlap row", () => {
+    const rows = buildForecastSeries(overlapHistory, sim, "pit");
+    expect(bridgeForecast(rows)).toBe(rows);
+  });
+
+  it("buildStackRows: realised wins in overlap year and is not flagged forecast", () => {
+    const rows = buildStackRows(overlapHistory, sim, new Set());
+    expect(rows.map((r) => r.year)).toEqual([2023, 2024, 2025, 2026, 2027]);
+    expect(rows[3]).toEqual({ year: 2026, forecast: false, pit: 101 });
+    expect(rows[4]).toEqual({ year: 2027, forecast: true, pit: 110.5, cit: 66, vat: 320 });
+  });
+
+  it("buildStackRows: gap year yields no row; no-overlap unchanged", () => {
+    const rows = buildStackRows(history, gapSim, new Set());
+    expect(rows.map((r) => r.year)).toEqual([2023, 2024, 2025, 2028, 2029]);
+    expect(rows.every((r) => Object.values(r).every((v) => v === true || v === false || Number.isFinite(v)))).toBe(true);
+  });
+
+  it("tables show one row per year and realised value for the overlap year", () => {
+    render(<ForecastVsActual tax="pit" history={overlapHistory} sim={sim} />);
+    const t1 = screen.getByRole("table", { name: /PIT/ });
+    expect(within(t1).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["2023", "2024", "2025", "2026", "2027"]);
+    render(<BudgetStack sim={sim} history={overlapHistory} />);
+    const t2 = screen.getAllByRole("table")[1];
+    const row2026 = within(t2).getByRole("rowheader", { name: "2026" }).closest("tr")!;
+    expect(row2026).toHaveTextContent("101,00");
+    expect(row2026).toHaveTextContent("wykonanie");
   });
 });
 
@@ -145,5 +193,25 @@ describe("App states", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("server status done on mount does not trigger a second history/simulate load", async () => {
+    const params = [{ key: "vat_rate", label: "Stawka VAT", tax: "vat", unit: "ułamek", default: 0.23, min: 0, max: 0.4, step: 0.01, description: "x" }];
+    const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200 });
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push(`${init?.method ?? "GET"} ${url}`);
+        if (url.endsWith("/parameters")) return json(params);
+        if (url.endsWith("/refresh/status")) return json({ state: "done", errors: {}, updated_at: "2026-10-09T12:00:00Z" });
+        return url.endsWith("/history") ? json(history) : json(sim);
+      }),
+    );
+    render(<App />);
+    expect(await screen.findByTestId("metric-row")).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 500));
+    expect(calls.filter((c) => c === "GET /api/history")).toHaveLength(1);
+    expect(calls.filter((c) => c === "POST /api/simulate")).toHaveLength(1);
   });
 });

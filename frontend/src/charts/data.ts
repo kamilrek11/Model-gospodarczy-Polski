@@ -10,32 +10,41 @@ export interface ForecastRow {
   band95?: [number, number];
 }
 
-/** Wiersze: lata historii (wykonanie) + lata prognozy (mediana i pasma 80% / 95%). */
+/**
+ * Wiersze: lata historii (wykonanie) + lata prognozy (mediana i pasma 80% / 95%).
+ * Polityka nakładania: JEDEN wiersz na rok. Jeśli rok jest i w historii, i w prognozie,
+ * wiersz ma jednocześnie `actual` i `median` (linie łączą się wizualnie). Lata bez
+ * żadnej wartości (luka między historią a prognozą) nie dostają wiersza – nic nie jest
+ * zmyślane ani interpolowane.
+ */
 export function buildForecastSeries(history: HistoryData, sim: SimulationResult, tax: TaxKey): ForecastRow[] {
-  const rows: ForecastRow[] = (history[tax] ?? []).map((p) => ({ year: p.year, forecast: false, actual: p.value }));
+  const byYear = new Map<number, ForecastRow>();
+  for (const p of history[tax] ?? []) byYear.set(p.year, { year: p.year, forecast: false, actual: p.value });
   const band = sim.taxes[tax];
   if (band) {
     sim.years.forEach((year, i) => {
-      rows.push({
-        year,
-        forecast: true,
-        median: band.median[i],
-        band80: [band.p10[i], band.p90[i]],
-        band95: [band.p2_5[i], band.p97_5[i]],
-      });
+      const row = byYear.get(year) ?? { year, forecast: true };
+      row.forecast = true;
+      row.median = band.median[i];
+      row.band80 = [band.p10[i], band.p90[i]];
+      row.band95 = [band.p2_5[i], band.p97_5[i]];
+      byYear.set(year, row);
     });
   }
-  return rows.sort((a, b) => a.year - b.year);
+  return [...byYear.values()].sort((a, b) => a.year - b.year);
 }
 
-/** Dla wykresu: ostatni rok historii łączy się z prognozą (pasma o zerowej szerokości). */
+/** Dla wykresu: ostatni rok wykonania łączy się z prognozą (pasma o zerowej szerokości). */
 export function bridgeForecast(rows: ForecastRow[]): ForecastRow[] {
   const firstF = rows.findIndex((r) => r.forecast);
-  if (firstF <= 0) return rows;
-  const prev = rows[firstF - 1];
-  if (prev.actual === undefined) return rows;
+  if (firstF <= 0 || rows[firstF].actual !== undefined) return rows;
+  let i = firstF - 1;
+  while (i >= 0 && rows[i].actual === undefined) i--;
+  if (i < 0) return rows;
+  const prev = rows[i];
+  const v = prev.actual as number;
   const out = rows.slice();
-  out[firstF - 1] = { ...prev, median: prev.actual, band80: [prev.actual, prev.actual], band95: [prev.actual, prev.actual] };
+  out[i] = { ...prev, median: v, band80: [v, v], band95: [v, v] };
   return out;
 }
 
@@ -70,19 +79,27 @@ export function changeVsBaseline(sim: SimulationResult, tax: TaxKey): Change | n
 
 export type StackRow = { year: number; forecast: boolean } & Partial<Record<TaxKey, number>>;
 
-/** Słupki skumulowane: wykonanie w latach historii, mediana w latach prognozy; ukryte serie pominięte. */
+/**
+ * Słupki skumulowane. Polityka nakładania: wykonanie wygrywa – rok, w którym historia ma
+ * dane dla któregokolwiek podatku, pokazuje wyłącznie wykonanie (forecast=false), a mediany
+ * prognozy dla tego roku są pomijane (mediana nigdy nie jest podpisana jako wykonanie).
+ * Pozostałe lata prognozy: mediana, forecast=true. Ukryte serie są pominięte.
+ */
 export function buildStackRows(history: HistoryData, sim: SimulationResult, hidden: ReadonlySet<TaxKey>): StackRow[] {
+  const realisedYears = new Set<number>();
+  for (const tax of TAX_ORDER) for (const p of history[tax] ?? []) realisedYears.add(p.year);
+
   const byYear = new Map<number, StackRow>();
-  const row = (year: number, forecast: boolean) => {
+  const row = (year: number) => {
     let r = byYear.get(year);
-    if (!r) byYear.set(year, (r = { year, forecast }));
+    if (!r) byYear.set(year, (r = { year, forecast: !realisedYears.has(year) }));
     return r;
   };
   for (const tax of TAX_ORDER) {
     if (hidden.has(tax)) continue;
-    for (const p of history[tax] ?? []) row(p.year, false)[tax] = p.value;
+    for (const p of history[tax] ?? []) row(p.year)[tax] = p.value;
     const band = sim.taxes[tax];
-    if (band) sim.years.forEach((y, i) => (row(y, true)[tax] = band.median[i]));
+    if (band) sim.years.forEach((y, i) => realisedYears.has(y) || (row(y)[tax] = band.median[i]));
   }
   return [...byYear.values()].sort((a, b) => a.year - b.year);
 }
