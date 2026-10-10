@@ -166,3 +166,36 @@ def test_default_clients_fail_on_unmapped_series(tmp_path):
     assert "not mapped" in status["errors"]["gus_bdl"]
     assert "not mapped" in status["errors"]["execution"]
     assert Store(store_path).load_model() is None
+
+
+@pytest.mark.parametrize("fail_at", ["second_series", "meta"])
+def test_refresh_write_failure_leaves_store_unchanged(tmp_path, monkeypatch, fail_at):
+    db = tmp_path / "t.db"
+    store = Store(str(db))
+    assert refresh(store, good_clients(seed=3)).ok
+    before = snapshot(store)
+    raw_before = db.read_bytes()
+
+    calls = {"n": 0}
+    orig_series, orig_meta = Store._write_series, Store._write_meta
+
+    def flaky_series(self, conn, name, source, df):
+        calls["n"] += 1
+        if fail_at == "second_series" and calls["n"] == 2:
+            raise OSError("disk full (injected)")
+        return orig_series(self, conn, name, source, df)
+
+    def flaky_meta(self, conn, key, value):
+        if fail_at == "meta":
+            raise OSError("disk full (injected)")
+        return orig_meta(self, conn, key, value)
+
+    monkeypatch.setattr(Store, "_write_series", flaky_series)
+    monkeypatch.setattr(Store, "_write_meta", flaky_meta)
+    job = RefreshJob()
+    assert job.try_start()
+    job.run(store, good_clients(seed=99))
+
+    assert job.state == "failed" and "disk full" in job.errors["refresh"]
+    assert_same(snapshot(store), before)
+    assert db.read_bytes() == raw_before

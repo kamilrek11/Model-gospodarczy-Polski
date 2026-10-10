@@ -20,11 +20,35 @@ class Store:
         conn = sqlite3.connect(self.path)
         return conn
 
-    def save_series(self, name: str, source: str, df: pd.DataFrame) -> None:
+    def _write_series(self, conn: sqlite3.Connection, name: str, source: str, df: pd.DataFrame) -> None:
         rows = [(name, int(y), None if pd.isna(v) else float(v), source) for y, v in df["value"].items()]
+        conn.execute("DELETE FROM series WHERE name = ?", (name,))
+        conn.executemany("INSERT INTO series (name, year, value, source) VALUES (?, ?, ?, ?)", rows)
+
+    def _write_model(self, conn: sqlite3.Connection, payload: dict) -> None:
+        conn.execute("INSERT OR REPLACE INTO model (id, payload) VALUES (1, ?)", (json.dumps(payload),))
+
+    def _write_meta(self, conn: sqlite3.Connection, key: str, value: str) -> None:
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
+
+    def save_series(self, name: str, source: str, df: pd.DataFrame) -> None:
         with self._conn() as c:
-            c.execute("DELETE FROM series WHERE name = ?", (name,))
-            c.executemany("INSERT INTO series (name, year, value, source) VALUES (?, ?, ?, ?)", rows)
+            self._write_series(c, name, source, df)
+
+    def save_snapshot(
+        self, series: dict[str, tuple[str, pd.DataFrame]], model: dict, meta: dict[str, str]
+    ) -> None:
+        """Write series (name -> (source, df)), the model and meta in ONE transaction: all or nothing."""
+        conn = self._conn()
+        try:
+            with conn:  # commits on success, rolls back on any exception
+                for name, (source, df) in series.items():
+                    self._write_series(conn, name, source, df)
+                self._write_model(conn, model)
+                for key, value in meta.items():
+                    self._write_meta(conn, key, value)
+        finally:
+            conn.close()
 
     def load_series(self, name: str) -> pd.DataFrame:
         with self._conn() as c:
@@ -34,7 +58,7 @@ class Store:
 
     def save_model(self, payload: dict) -> None:
         with self._conn() as c:
-            c.execute("INSERT OR REPLACE INTO model (id, payload) VALUES (1, ?)", (json.dumps(payload),))
+            self._write_model(c, payload)
 
     def load_model(self) -> dict | None:
         with self._conn() as c:
@@ -43,7 +67,7 @@ class Store:
 
     def set_meta(self, key: str, value: str) -> None:
         with self._conn() as c:
-            c.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
+            self._write_meta(c, key, value)
 
     def get_meta(self, key: str) -> str | None:
         with self._conn() as c:

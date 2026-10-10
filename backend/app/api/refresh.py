@@ -58,11 +58,9 @@ def refresh(store: Store, clients: list[SourceClient], lags: int = 1) -> Refresh
     except (ValueError, np.linalg.LinAlgError) as e:
         return RefreshResult(False, {MODEL_SOURCE: f"estimation failed: {e}"}, store.get_meta("updated_at"))
 
-    for series, (source, df) in fetched.items():
-        store.save_series(series, source, df)
-    store.save_model(model.to_dict())
     updated_at = datetime.now(UTC).isoformat()
-    store.set_meta("updated_at", updated_at)
+    # one transaction: a failure mid-write rolls back and the last good state stays intact
+    store.save_snapshot(fetched, model.to_dict(), {"updated_at": updated_at})
     return RefreshResult(True, {}, updated_at)
 
 
