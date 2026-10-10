@@ -39,8 +39,9 @@ BUDGET_DB_PATH=/sciezka/do/demo.db .venv/bin/python -m uvicorn app.main:app
 ```
 
 **Dane z tego skryptu są SYNTETYCZNE (wymyślone, deterministyczne) i nie mogą być nigdy przedstawiane jako prawdziwe dane
-GUS/MF/ZUS/Eurostat.** Skrypt odmawia działania bez `SEED_FIXTURES=1` i bez jawnego `--db` (nigdy nie dotyka domyślnej bazy),
-zapisuje w bazie `meta.synthetic = "1"` i wypisuje ostrzeżenie.
+GUS/MF/ZUS/Eurostat.** Skrypt odmawia działania bez `SEED_FIXTURES=1` i bez jawnego `--db`, a także gdy rozwiązana ścieżka (realpath) wskazuje
+domyślną bazę aplikacji lub `$BUDGET_DB_PATH`, albo gdy plik już istnieje i nie jest oznaczony jako syntetyczny
+(`meta.synthetic = "1"`); zapisuje w bazie `meta.synthetic = "1"` i wypisuje ostrzeżenie.
 
 ### Testy end-to-end (Playwright)
 

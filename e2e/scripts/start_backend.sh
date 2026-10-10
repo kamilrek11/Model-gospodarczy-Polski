@@ -7,9 +7,10 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 py="$root/backend/.venv/bin/python"; [ -x "$py" ] || py=python3
 dir="$(mktemp -d)"
 trap 'rm -rf "$dir"' EXIT
-export BUDGET_DB_PATH="$dir/budget.db"
+db="$dir/budget.db"
 cd "$root/backend"
 if [ "$mode" = "seeded" ]; then
-  SEED_FIXTURES=1 "$py" -m scripts.seed_fixtures --db "$BUDGET_DB_PATH"
+  SEED_FIXTURES=1 "$py" -m scripts.seed_fixtures --db "$db"
 fi
+export BUDGET_DB_PATH="$db"
 "$py" -m uvicorn app.main:app --host 127.0.0.1 --port "$port"

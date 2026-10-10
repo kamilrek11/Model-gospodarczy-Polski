@@ -3,8 +3,10 @@
 !!! The seeded numbers are INVENTED (random walk with fixed seed). They are NOT real
 !!! GUS / MF / ZUS / Eurostat data and must NEVER be presented as real.
 
-Guards: refuses to run unless env SEED_FIXTURES=1 AND an explicit --db path is given
-(the default application database is never touched implicitly).
+Guards: refuses to run unless env SEED_FIXTURES=1 AND an explicit --db path is given.
+The path is resolved (realpath) and refused if it is the application's default database
+or the current $BUDGET_DB_PATH, and refused if the file already exists but is not
+marked synthetic (meta synthetic == "1"): an existing unmarked store is treated as possibly real.
 """
 
 import argparse
@@ -15,6 +17,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from app.api.refresh import DEFAULT_DB_PATH
 from app.model.macro import MACRO_VARS, fit_macro
 from app.store import Store
 
@@ -49,7 +52,26 @@ def check_guards(db: str | None, env: dict[str, str] | None = None) -> Path:
         raise SeedRefused("refusing to seed: set SEED_FIXTURES=1 (data is synthetic, never real)")
     if not db:
         raise SeedRefused("refusing to seed: an explicit --db path is required")
-    return Path(db)
+    target = os.path.realpath(db)
+    protected = {os.path.realpath(DEFAULT_DB_PATH)}
+    if env.get("BUDGET_DB_PATH"):
+        protected.add(os.path.realpath(env["BUDGET_DB_PATH"]))
+    if target in protected:
+        raise SeedRefused(f"refusing to seed: {target} is the application's database (default or $BUDGET_DB_PATH)")
+    if os.path.exists(target) and not _is_synthetic(target):
+        raise SeedRefused(f"refusing to seed: {target} exists and is not marked synthetic (possibly real data)")
+    return Path(target)
+
+
+def _is_synthetic(path: str) -> bool:
+    import sqlite3
+
+    try:
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as c:
+            row = c.execute("SELECT value FROM meta WHERE key = 'synthetic'").fetchone()
+    except sqlite3.Error:
+        return False
+    return bool(row) and row[0] == "1"
 
 
 def synthetic_panel(n_years: int = N_YEARS, seed: int = 20260101) -> dict[str, pd.DataFrame]:
