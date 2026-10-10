@@ -8,6 +8,10 @@ the state budget in tys. zł (published with 2 decimals). Year matrix and layout
 docs/data-sources-discovery.md, section "MF – macierz lat" (2016-2025 supported; 2015 is a legacy
 .xls workbook and stays unsupported).
 
+Cache: parsed values per year (or an "unsupported" verdict for the exact published file) as JSON,
+keyed by resource id + size and a fingerprint of CACHE_VERSION and the active limits (bump rule at
+CACHE_VERSION).
+
 Everything downloaded is untrusted: archives are read in memory only (member names are never used
 as paths), sizes are capped while streaming and while decompressing, only https links on the
 dane.gov.pl hosts are fetched (also after redirects) and workbooks are read with openpyxl in
@@ -49,6 +53,7 @@ DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 CHUNK = 1 << 20
 
 MAX_NESTING = 2  # ZIPs opened inside the downloaded one (2015 wraps "TOM I" once more)
+MAX_ARCHIVES = 10  # nested archives opened per find_member call (real reports: 1, 2015: 2)
 MAX_MEMBERS = 5000  # per archive (the largest real "TOM I" has ~190)
 XLSX_MAX_UNCOMPRESSED = 50_000_000  # sum of the workbook's own parts (real: ~60 KB)
 MAX_SHEETS = 10
@@ -59,7 +64,10 @@ UNIT_TEXT = "w tysiącach zł"
 EXECUTION_HEADER = "wykonanie"
 PLAUSIBLE_MAX_THOUSAND_ZL = 2e9  # 2000 mld zł: anything above is a unit/layout error
 OLE2_MAGIC = bytes.fromhex("d0cf11e0a1b11ae1")
-CACHE_VERSION = 1
+# Bump CACHE_VERSION whenever parsing changes in a way that could change a value or turn an
+# "unsupported" verdict into a supported one (labels, column rules, rounding, member matching, the
+# descent rule). The active limits are part of the cache fingerprint automatically.
+CACHE_VERSION = 2
 
 # Resources verified on 2026-10-10 to be unparseable by this client; skipped without downloading
 # (a re-published resource gets a new id and is tried again).
@@ -208,21 +216,47 @@ def _open_zip(data: bytes, max_members: int) -> zipfile.ZipFile:
         raise _err(f"not a valid ZIP archive: {e}") from e
     if len(zf.infolist()) > max_members:
         zf.close()
-        raise _err(f"archive has more than {max_members} members")
+        raise _limit(f"archive has more than {max_members} members")
     return zf
 
 
-def _read_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo, limit: int) -> bytes:
+class LimitExceeded(SourceError):
+    """A failure caused by a configured size/count limit (depends on the limits, never cached)."""
+
+
+def _limit(message: str) -> LimitExceeded:
+    return LimitExceeded(SOURCE, message)
+
+
+class _Budget:
+    """Decompressed bytes still allowed for one find_member call (all levels together)."""
+
+    def __init__(self, total: int):
+        self.total = total
+        self.left = total
+
+    def take(self, n: int) -> None:
+        self.left -= n
+        if self.left < 0:
+            raise _limit(f"decompression budget of {self.total} bytes exceeded (max_total_decompressed_bytes)")
+
+
+def _read_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo, limit: int, budget: _Budget | None = None) -> bytes:
     name = _member_name(info)
     if info.file_size > limit:
-        raise _err(f"member {name!r} declares {info.file_size} bytes (limit {limit})")
+        raise _limit(f"member {name!r} declares {info.file_size} bytes (limit {limit})")
+    if budget is not None and info.file_size > budget.left:
+        raise _limit(f"member {name!r} ({info.file_size} bytes) does not fit the remaining decompression budget "
+                     f"({budget.left} of {budget.total} bytes, max_total_decompressed_bytes)")
     buf = bytearray()
     try:
         with zf.open(info) as f:
             while chunk := f.read(CHUNK):
                 buf += chunk
+                if budget is not None:
+                    budget.take(len(chunk))
                 if len(buf) > limit:
-                    raise _err(f"member {name!r} exceeds {limit} bytes while reading")
+                    raise _limit(f"member {name!r} exceeds {limit} bytes while reading")
     except SourceError:
         raise
     except (zipfile.BadZipFile, RuntimeError, NotImplementedError, zlib.error, EOFError, OSError, ValueError) as e:
@@ -236,12 +270,23 @@ def find_member(
     max_member_bytes: int = 30_000_000,
     max_depth: int = MAX_NESTING,
     max_members: int = MAX_MEMBERS,
+    max_total_decompressed_bytes: int | None = None,
+    max_archives: int = MAX_ARCHIVES,
 ) -> bytes:
     """Bytes of the single `007*DOCHODY BP ZESTAWIENIE OG*` member (case-insensitive, `#Uxxxx`
-    and CP852 names decoded), searched in the archive and in nested ZIPs up to `max_depth`
-    levels ("TOM I" first; PDF bundles and nested archives over `max_member_bytes` are skipped,
-    the latter reported if nothing is found). Path-traversal/absolute names are ignored."""
+    and CP852 names decoded), searched in the archive and in nested ZIPs up to `max_depth` levels.
 
+    Descent rule: only nested archives whose (decoded) name contains "TOM I" (not "TOM II") and not
+    "PDF" are opened — every real report 2015-2025 keeps the 007 workbook in such an archive
+    ("…TOM I XLS.zip", "…TOM I-WERSJA XLS.ZIP", "…ZA 2025 TOM I.zip"; 2015 adds the wrapper
+    "…Tom I i II.zip"). At most `max_archives` nested archives are opened and all decompressed bytes
+    of the call (every level together) are capped by `max_total_decompressed_bytes` (default
+    3 x max_member_bytes), so a small nested "amplification" archive fails fast. Nested archives over
+    `max_member_bytes` are skipped and reported if nothing is found. Path-traversal/absolute names
+    are ignored. Limit-caused failures raise LimitExceeded (a SourceError)."""
+
+    budget = _Budget(max_total_decompressed_bytes or 3 * max_member_bytes)
+    opened = [0]
     skipped: list[str] = []
 
     def search(data: bytes, depth: int) -> bytes | None:
@@ -251,27 +296,33 @@ def find_member(
             if len(hits) > 1:
                 raise _err(f"ambiguous 007 members: {[_member_name(i) for i in hits]}")
             if hits:
-                return _read_member(zf, hits[0], max_member_bytes)
+                return _read_member(zf, hits[0], max_member_bytes, budget)
             if depth >= max_depth:
                 return None
             nested = [
                 i for i in infos
-                if _member_name(i).upper().endswith(".ZIP") and "PDF" not in _member_name(i).upper()
+                if (n := _member_name(i).upper()).endswith(".ZIP") and "PDF" not in n and _TOM_I.search(n)
             ]
-            nested.sort(key=lambda i: 0 if _TOM_I.search(_member_name(i).upper()) else 1)
             for info in nested:
                 if info.file_size > max_member_bytes:
                     skipped.append(f"{_member_name(info)!r} ({info.file_size} bytes)")
                     continue
-                found = search(_read_member(zf, info, max_member_bytes), depth + 1)
+                if opened[0] >= max_archives:
+                    raise _limit(f"more than {max_archives} nested archives to search (max_archives)")
+                opened[0] += 1
+                found = search(_read_member(zf, info, max_member_bytes, budget), depth + 1)
                 if found is not None:
                     return found
         return None
 
     found = search(zip_bytes, 0)
     if found is None:
-        extra = f"; skipped oversized nested archives (limit {max_member_bytes}): {', '.join(skipped)}" if skipped else ""
-        raise _err(f"member 007*DOCHODY BP ZESTAWIENIE OG* not found in the archive{extra}")
+        if skipped:
+            raise _limit(
+                "member 007*DOCHODY BP ZESTAWIENIE OG* not found; skipped oversized nested archives "
+                f"(limit {max_member_bytes}): {', '.join(skipped)}"
+            )
+        raise _err("member 007*DOCHODY BP ZESTAWIENIE OG* not found in the archive")
     return found
 
 
@@ -342,7 +393,7 @@ def extract_revenue(xlsx_bytes: bytes, *, year: int | None = None, notes: list[s
         raise _err("legacy .xls (BIFF/OLE2) workbook is not supported")
     with _open_zip(xlsx_bytes, MAX_MEMBERS) as parts:
         if sum(i.file_size for i in parts.infolist()) > XLSX_MAX_UNCOMPRESSED:
-            raise _err(f"workbook expands beyond {XLSX_MAX_UNCOMPRESSED} bytes")
+            raise _limit(f"workbook expands beyond {XLSX_MAX_UNCOMPRESSED} bytes")
     try:
         wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True, keep_links=False)
     except Exception as e:  # untrusted file: any parser failure is a source error
@@ -388,11 +439,15 @@ class MfBudgetExecutionClient:
         years: range | None = None,
         max_download_bytes: int = 60_000_000,
         max_member_bytes: int = 30_000_000,
+        max_total_decompressed_bytes: int | None = None,
         sleep=time.sleep,
         max_retries: int = 3,
     ):
-        if max_download_bytes <= 0 or max_member_bytes <= 0:
+        if max_total_decompressed_bytes is None:
+            max_total_decompressed_bytes = 3 * max_member_bytes
+        if min(max_download_bytes, max_member_bytes, max_total_decompressed_bytes) <= 0:
             raise ValueError("size limits must be positive")
+        self.max_total_decompressed_bytes = max_total_decompressed_bytes
         self.http = http
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self.years = years
@@ -406,6 +461,14 @@ class MfBudgetExecutionClient:
     def _cache_path(self, year: int) -> Path | None:
         return self.cache_dir / f"mf_execution_{year}.json" if self.cache_dir else None
 
+    def _fingerprint(self) -> str:
+        """Parser version + active limits: changing either invalidates every cached entry."""
+        return (
+            f"v{CACHE_VERSION}:dl={self.max_download_bytes}:member={self.max_member_bytes}"
+            f":total={self.max_total_decompressed_bytes}:archives={MAX_ARCHIVES}:depth={MAX_NESTING}"
+            f":members={MAX_MEMBERS}:xlsx={XLSX_MAX_UNCOMPRESSED}:rows={MAX_ROWS}"
+        )
+
     def _cache_read(self, res: Resource) -> dict | None:
         path = self._cache_path(res.year)
         if path is None or not path.is_file():
@@ -413,7 +476,7 @@ class MfBudgetExecutionClient:
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
             if (
-                doc.get("version") != CACHE_VERSION
+                doc.get("fingerprint") != self._fingerprint()
                 or doc.get("year") != res.year
                 or doc.get("resource_id") != res.id
                 or doc.get("size") != res.size
@@ -432,7 +495,7 @@ class MfBudgetExecutionClient:
         path = self._cache_path(res.year)
         if path is None:
             return
-        doc = {"version": CACHE_VERSION, "year": res.year, "resource_id": res.id, "size": res.size, "url": res.url}
+        doc = {"fingerprint": self._fingerprint(), "year": res.year, "resource_id": res.id, "size": res.size, "url": res.url}
         doc.update(payload)
         tmp = None
         try:
@@ -503,12 +566,22 @@ class MfBudgetExecutionClient:
             raise _err(f"resource declares {res.size} bytes (limit max_download_bytes={self.max_download_bytes})")
         data = self._download(res.url)
         notes: list[str] = []
-        try:  # the download is complete (HTTP framing checked), so content errors are deterministic
-            member = find_member(data, max_member_bytes=self.max_member_bytes)
+        try:
+            member = find_member(
+                data,
+                max_member_bytes=self.max_member_bytes,
+                max_total_decompressed_bytes=self.max_total_decompressed_bytes,
+            )
             values = extract_revenue(member, year=res.year, notes=notes)
+        except LimitExceeded:
+            raise  # depends on the limits: never cached
         except SourceError as e:
-            self._cache_write(res, {"unsupported": e.message})
-            raise _Unsupported(SOURCE, e.message) from e
+            # Cache the verdict only for the exact published file (length == API file_size); an HTML
+            # maintenance page, a captive portal or a mangled body is retried on the next fetch.
+            if res.size is not None and len(data) == res.size:
+                self._cache_write(res, {"unsupported": e.message})
+                raise _Unsupported(SOURCE, e.message) from e
+            raise _err(f"{e.message} (downloaded {len(data)} bytes, API file_size {res.size}; not cached)") from e
         self.warnings.extend(f"{res.year}: {n}" for n in notes)
         self._cache_write(res, {"values": values})
         return values

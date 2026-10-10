@@ -549,3 +549,96 @@ def test_known_unsupported_resource_not_downloaded():
     assert out["rev_vat"].index.tolist() == [2024]
     assert all("2015" not in d for d in fake.downloads())
     assert any(w.startswith("2015:") and "legacy .xls" in w for w in client.warnings)
+
+
+# --- fix round 1: decompression budget, archive cap, cache policy -----------------------------
+
+
+def _counting_open(monkeypatch) -> dict:
+    """Count every decompressed byte returned by ZipFile.open(...).read()."""
+    counter = {"bytes": 0}
+    real_open = zipfile.ZipFile.open
+
+    def open_(self, *a, **k):
+        f = real_open(self, *a, **k)
+        real_read = f.read
+
+        def read(n=-1):
+            data = real_read(n)
+            counter["bytes"] += len(data)
+            return data
+
+        f.read = read
+        return f
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", open_)
+    return counter
+
+
+def _amplifier(n_mid: int, k_leaf: int, leaf_bytes: int) -> bytes:
+    """outer (deflated) -> n_mid deflated 'TOM I' zips -> k_leaf stored 'TOM I' zips of leaf_bytes zeros."""
+    leaf = make_zip({"pad.bin": b"\0" * leaf_bytes}, zipfile.ZIP_STORED)
+    mid = make_zip({f"leaf{j} TOM I XLS.zip": leaf for j in range(k_leaf)})
+    return make_zip({f"mid{i} TOM I XLS.zip": mid for i in range(n_mid)})
+
+
+def test_nested_amplification_stops_at_total_budget(monkeypatch):
+    bomb = _amplifier(n_mid=3, k_leaf=3, leaf_bytes=90_000)  # each archive below the member limit
+    assert len(bomb) < 20_000
+    counter = _counting_open(monkeypatch)
+    with pytest.raises(SourceError, match="decompression budget") as e:
+        find_member(bomb, max_member_bytes=1_000_000, max_total_decompressed_bytes=400_000)
+    assert e.value.source == "mf_execution"
+    assert counter["bytes"] <= 400_000 + 1_000_000  # bounded: at most one chunk past the budget
+
+
+def test_nested_amplification_stops_at_archive_cap(monkeypatch):
+    bomb = _amplifier(n_mid=6, k_leaf=6, leaf_bytes=1_000)
+    counter = _counting_open(monkeypatch)
+    with pytest.raises(SourceError, match="nested archives") as e:
+        find_member(bomb, max_archives=10)
+    assert "10" in e.value.message
+    assert counter["bytes"] < 200_000
+
+
+def test_only_tom_i_archives_are_opened():
+    z = make_zip({"Sprawozdanie TOM II XLS.zip": make_zip({MEMBER_007: b"wrong volume"}),
+                  "inne.zip": make_zip({MEMBER_007: b"other"})})
+    with pytest.raises(SourceError, match="not found"):
+        find_member(z)
+
+
+def test_html_page_of_wrong_length_not_cached_as_unsupported(tmp_path):
+    good = report_zip(2024)
+    fake = FakeDaneGov({2024: good})
+    url = "https://api.dane.gov.pl/media/resources/2024/report_2024.zip"
+    fake.overrides[url] = httpx.Response(200, html="<html>przerwa techniczna</html>")
+    client = client_for(fake, tmp_path)
+    with pytest.raises(SourceError, match="2024"):
+        client.fetch()
+    del fake.overrides[url]
+    fake.requests.clear()
+    out = client_for(fake, tmp_path).fetch()
+    assert len(fake.downloads()) == 1
+    assert out["rev_vat"].loc[2024, "value"] == pytest.approx(287.68336891)
+
+
+def test_limit_dependent_failure_not_cached(tmp_path):
+    fake = FakeDaneGov({2023: report_zip(2023), 2024: report_zip(2024)})
+    client = client_for(fake, tmp_path, max_member_bytes=1_000)
+    with pytest.raises(SourceError):
+        client.fetch()
+    fake.requests.clear()
+    out = client_for(fake, tmp_path).fetch()
+    assert len(fake.downloads()) == 2
+    assert out["rev_vat"].index.tolist() == [2023, 2024]
+
+
+def test_changing_a_limit_invalidates_cached_entry(tmp_path):
+    fake = FakeDaneGov({2024: report_zip(2024)})
+    client_for(fake, tmp_path).fetch()
+    fake.requests.clear()
+    client_for(fake, tmp_path).fetch()
+    assert fake.downloads() == []
+    client_for(fake, tmp_path, max_member_bytes=29_000_000).fetch()
+    assert len(fake.downloads()) == 1
