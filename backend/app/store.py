@@ -1,5 +1,7 @@
 import json
 import sqlite3
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 
 import pandas as pd
 
@@ -16,9 +18,11 @@ class Store:
             c.execute("CREATE TABLE IF NOT EXISTS model (id INTEGER PRIMARY KEY CHECK (id = 1), payload TEXT NOT NULL)")
             c.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
 
-    def _conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.path)
-        return conn
+    @contextmanager
+    def _conn(self) -> Iterator[sqlite3.Connection]:
+        """One transaction on a fresh connection: commit on success, roll back on error, ALWAYS close."""
+        with closing(sqlite3.connect(self.path)) as conn, conn:
+            yield conn
 
     def _write_series(self, conn: sqlite3.Connection, name: str, source: str, df: pd.DataFrame) -> None:
         rows = [(name, int(y), None if pd.isna(v) else float(v), source) for y, v in df["value"].items()]
@@ -39,16 +43,12 @@ class Store:
         self, series: dict[str, tuple[str, pd.DataFrame]], model: dict, meta: dict[str, str]
     ) -> None:
         """Write series (name -> (source, df)), the model and meta in ONE transaction: all or nothing."""
-        conn = self._conn()
-        try:
-            with conn:  # commits on success, rolls back on any exception
-                for name, (source, df) in series.items():
-                    self._write_series(conn, name, source, df)
-                self._write_model(conn, model)
-                for key, value in meta.items():
-                    self._write_meta(conn, key, value)
-        finally:
-            conn.close()
+        with self._conn() as conn:  # commits on success, rolls back on any exception, then closes
+            for name, (source, df) in series.items():
+                self._write_series(conn, name, source, df)
+            self._write_model(conn, model)
+            for key, value in meta.items():
+                self._write_meta(conn, key, value)
 
     def load_series(self, name: str) -> pd.DataFrame:
         with self._conn() as c:

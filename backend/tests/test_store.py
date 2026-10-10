@@ -58,3 +58,24 @@ def test_save_snapshot_is_atomic_on_mid_write_failure(tmp_path):
     pd.testing.assert_frame_equal(after[0], before[0])
     pd.testing.assert_frame_equal(after[1], before[1])
     assert after[2:] == before[2:]
+
+
+def test_store_closes_every_connection(tmp_path):
+    import gc
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        store = Store(str(tmp_path / "t.db"))
+        df = pd.DataFrame({"value": [1.0, 2.0]}, index=pd.Index([2021, 2022], name="year"))
+        store.save_series("a", "t", df)
+        store.load_series("a")
+        store.save_model({"x": 1})
+        store.load_model()
+        store.set_meta("k", "v")
+        store.get_meta("k")
+        store.save_snapshot({"b": ("t", df)}, {"x": 2}, {"updated_at": "u"})
+        del store
+        gc.collect()
+    leaks = [w for w in caught if issubclass(w.category, ResourceWarning)]
+    assert leaks == [], [str(w.message) for w in leaks]

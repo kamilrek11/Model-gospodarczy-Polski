@@ -16,3 +16,5 @@ dependencies = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+# leaked sqlite connections (ResourceWarning, often reported as unraisable in __del__) fail the suite
+filterwarnings = ["error::ResourceWarning", "error::pytest.PytestUnraisableExceptionWarning"]

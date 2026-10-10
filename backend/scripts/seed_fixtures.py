@@ -65,9 +65,10 @@ def check_guards(db: str | None, env: dict[str, str] | None = None) -> Path:
 
 def _is_synthetic(path: str) -> bool:
     import sqlite3
+    from contextlib import closing
 
     try:
-        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as c:
+        with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as c:
             row = c.execute("SELECT value FROM meta WHERE key = 'synthetic'").fetchone()
     except sqlite3.Error:
         return False
