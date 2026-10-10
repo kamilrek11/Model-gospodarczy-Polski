@@ -2,8 +2,10 @@
 
 Sources: GUS BDL (macro), Eurostat (consumption, gross operating surplus after BDL's last year), MF
 budget execution (rev_vat/rev_cit/rev_pit). A source error or a quality-gate violation (source
-"dataset", app.data.dataset) never overwrites the last good state (spec §4). Source warnings (e.g. MF
-years that cannot be parsed) do not fail the refresh; they are reported in /refresh/status.
+"dataset", app.data.dataset) never overwrites the last good state (spec §4). Source warnings (e.g. the
+unsupported MF 2015 report) do not fail the refresh; they are reported in /refresh/status. An MF year from
+2016 on that cannot be obtained (network error, timeout, 5xx, size limit) is a source error, and revenue
+series that end before the last stored year are rejected (gate (f)), so revenues are never shortened.
 
 Environment: BDL_CLIENT_ID (optional BDL key), BUDGET_CACHE_DIR (MF cache; empty = off; default
 <db dir>/cache), REFRESH_DISABLED=1 (POST /refresh answers 403, e.g. demo/test instances).
@@ -22,7 +24,7 @@ import pandas as pd
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from app.data.base import SourceClient, SourceError
-from app.data.dataset import assemble, validate_dataset
+from app.data.dataset import REVENUE_RANGES_MLD, assemble, validate_against_stored, validate_dataset
 from app.data.eurostat import EurostatClient
 from app.data.gus_bdl import GusBdlClient
 from app.data.mf_execution import CACHE_ENV, MfBudgetExecutionClient
@@ -54,6 +56,17 @@ def _warnings_of(client) -> list[str]:
         return []
 
 
+def _stored_last_years(store: Store) -> dict[str, int | None]:
+    """Last stored year of each revenue series; seeded synthetic data does not count."""
+    if store.is_synthetic():
+        return {}
+    out: dict[str, int | None] = {}
+    for name in REVENUE_RANGES_MLD:
+        v = store.load_series(name)["value"].dropna()
+        out[name] = int(v.index.max()) if not v.empty else None
+    return out
+
+
 def refresh(store: Store, clients: Iterable[SourceClient], lags: int = 1) -> RefreshResult:
     fetched: dict[str, pd.DataFrame] = {}
     errors: dict[str, str] = {}
@@ -74,7 +87,7 @@ def refresh(store: Store, clients: Iterable[SourceClient], lags: int = 1) -> Ref
         return failed(errors)
 
     # quality gates on everything fetched: any violation stops here, nothing is written
-    violations = validate_dataset(fetched)
+    violations = validate_dataset(fetched) + validate_against_stored(fetched, _stored_last_years(store))
     if violations:
         return failed({DATASET_SOURCE: " ".join(violations)})
     series = assemble(fetched)

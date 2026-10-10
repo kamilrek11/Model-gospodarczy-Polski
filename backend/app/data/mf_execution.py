@@ -68,6 +68,10 @@ OLE2_MAGIC = bytes.fromhex("d0cf11e0a1b11ae1")
 # "unsupported" verdict into a supported one (labels, column rules, rounding, member matching, the
 # descent rule). The active limits are part of the cache fingerprint automatically.
 CACHE_VERSION = 2
+# Listed years from this one on must be obtained (downloaded or cached); a non-"unsupported" failure
+# of such a year (network error, timeout, 5xx, size limit) fails the whole fetch, so a transient
+# problem never shortens the stored revenue series. Earlier years (2015: legacy .xls) only warn.
+FIRST_EXPECTED_YEAR = 2016
 
 # Resources verified on 2026-10-10 to be unparseable by this client; skipped without downloading
 # (a re-published resource gets a new id and is tried again).
@@ -601,12 +605,24 @@ class MfBudgetExecutionClient:
             by_year[res.year] = res
         values: dict[int, dict[str, float]] = {}
         failures: list[str] = []
+        hard: list[tuple[int, str]] = []  # expected years that failed for a reason other than "unsupported"
         for year in sorted(by_year):
             try:
                 values[year] = self._year_values(by_year[year])
+            except _Unsupported as e:
+                failures.append(f"{year}: {e.message}")
             except SourceError as e:
                 failures.append(f"{year}: {e.message}")
+                if year >= FIRST_EXPECTED_YEAR:
+                    hard.append((year, e.message))
         self.warnings.extend(failures)
+        if hard:
+            years = ", ".join(str(y) for y, _ in hard)
+            detail = "; ".join(f"{y}: {m}" for y, m in hard)
+            raise _err(
+                f"Nie udało się pobrać danych MF za lata {years} (wymagane wszystkie opublikowane lata od "
+                f"{FIRST_EXPECTED_YEAR} r.; zapisane dane pozostają bez zmian, spróbuj ponownie później): {detail}"
+            )
         if not values:
             detail = "; ".join(failures) or "no matching resources listed"
             raise _err(f"no year could be obtained ({detail})")

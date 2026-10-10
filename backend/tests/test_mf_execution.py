@@ -415,9 +415,9 @@ def test_download_limit_enforced_while_streaming():
     fake.overrides[url] = httpx.Response(200, stream=Body())
     fake.items[0]["attributes"]["file_size"] = 1  # the API under-reports the size
     client = client_for(fake, max_download_bytes=50_000)
-    out = client.fetch()
-    assert out["rev_vat"].index.tolist() == [2023]
-    assert any("2024" in w and "50000" in w for w in client.warnings)
+    with pytest.raises(SourceError) as e:  # an expected year that cannot be obtained fails the fetch
+        client.fetch()
+    assert "2024" in e.value.message and "50000" in e.value.message
     assert len(pulled) < 10
 
 
@@ -425,9 +425,9 @@ def test_declared_size_over_limit_skips_download():
     fake = FakeDaneGov({2023: report_zip(2023), 2024: report_zip(2024)})
     fake.items[0]["attributes"]["file_size"] = 10**9
     client = client_for(fake)
-    client.fetch()
+    with pytest.raises(SourceError, match="2024"):
+        client.fetch()
     assert len(fake.downloads()) == 1
-    assert any("2024" in w for w in client.warnings)
 
 
 def test_content_length_over_limit_rejected_before_body():
@@ -435,8 +435,9 @@ def test_content_length_over_limit_rejected_before_body():
     url = "https://api.dane.gov.pl/media/resources/2024/report_2024.zip"
     fake.overrides[url] = httpx.Response(200, content=b"0" * 60_000)
     client = client_for(fake, max_download_bytes=50_000)
-    client.fetch()
-    assert any("2024" in w and "50000" in w for w in client.warnings)
+    with pytest.raises(SourceError) as e:
+        client.fetch()
+    assert "2024" in e.value.message and "50000" in e.value.message
 
 
 def test_redirect_within_allowlist_is_followed_and_to_other_host_rejected():
@@ -446,9 +447,10 @@ def test_redirect_within_allowlist_is_followed_and_to_other_host_rejected():
     fake.overrides[u23] = httpx.Response(301, headers={"Location": "https://dane.gov.pl/media/resources/2023/report_2023.zip"})
     fake.overrides[u24] = httpx.Response(302, headers={"Location": "https://evil.example/media/resources/2024/report_2024.zip"})
     client = client_for(fake)
-    out = client.fetch()
-    assert out["rev_vat"].index.tolist() == [2023]
-    assert any("2024" in w and "evil.example" in w for w in client.warnings)
+    with pytest.raises(SourceError) as e:
+        client.fetch()
+    assert "2024" in e.value.message and "evil.example" in e.value.message and "za lata 2024 (" in e.value.message
+    assert len([u for u in fake.requests if u.host == "dane.gov.pl"]) == 1  # 2023's redirect was followed
     assert all(u.host != "evil.example" for u in fake.requests)
 
 
@@ -642,3 +644,45 @@ def test_changing_a_limit_invalidates_cached_entry(tmp_path):
     assert fake.downloads() == []
     client_for(fake, tmp_path, max_member_bytes=29_000_000).fetch()
     assert len(fake.downloads()) == 1
+
+
+# --- final wave: a failed expected year fails the fetch (I1) -----------------------------------
+
+
+def test_transient_failure_of_an_expected_year_fails_the_fetch():
+    fake = FakeDaneGov({y: report_zip(y) for y in (2023, 2024, 2025)})
+    fake.overrides["https://api.dane.gov.pl/media/resources/2025/report_2025.zip"] = httpx.Response(503)
+    with pytest.raises(SourceError) as e:
+        client_for(fake).fetch()
+    assert e.value.source == "mf_execution"
+    assert "Nie udało się pobrać" in e.value.message and "2025" in e.value.message and "503" in e.value.message
+
+
+def test_network_error_of_an_expected_year_fails_the_fetch():
+    fake = FakeDaneGov({y: report_zip(y) for y in (2023, 2024)})
+
+    def handler(request):
+        if request.url.path.endswith("report_2023.zip"):
+            raise httpx.ConnectTimeout("timed out", request=request)
+        return fake(request)
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(SourceError, match="2023"):
+        MfBudgetExecutionClient(http, None, sleep=lambda s: None).fetch()
+
+
+def test_failed_expected_year_already_in_cache_is_served_from_cache(tmp_path):
+    fake = FakeDaneGov({y: report_zip(y) for y in (2024, 2025)})
+    client_for(fake, tmp_path).fetch()
+    fake.overrides["https://api.dane.gov.pl/media/resources/2025/report_2025.zip"] = httpx.Response(503)
+    out = client_for(fake, tmp_path).fetch()
+    assert out["rev_pit"].index.tolist() == [2024, 2025]
+
+
+def test_failure_of_a_year_before_2016_stays_a_warning():
+    fake = FakeDaneGov({2014: b"x", 2024: report_zip(2024)})
+    fake.overrides["https://api.dane.gov.pl/media/resources/2014/report_2014.zip"] = httpx.Response(503)
+    client = client_for(fake)
+    out = client.fetch()
+    assert out["rev_vat"].index.tolist() == [2024]
+    assert any(w.startswith("2014:") and "503" in w for w in client.warnings)

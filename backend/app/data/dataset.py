@@ -149,6 +149,25 @@ def validate_dataset(series: dict[str, pd.DataFrame]) -> list[str]:
     return out
 
 
+def validate_against_stored(series: dict[str, pd.DataFrame], stored_last_years: dict[str, int | None]) -> list[str]:
+    """Gate (f): no budget revenue series may end before the last year already stored (a source that
+    lost its latest years must not shorten the last good state). `stored_last_years`: name -> last
+    stored year (None = nothing stored; seeded synthetic data is not passed in)."""
+    out: list[str] = []
+    for name in REVENUE_RANGES_MLD:
+        prev = stored_last_years.get(name)
+        v = _values(series, name)
+        if prev is None or v is None or v.dropna().empty:
+            continue  # nothing stored yet, or already reported by gate (c)
+        last = int(v.dropna().index[-1])
+        if last < prev:
+            out.append(
+                f"Seria {name} kończy się na {last} r., a zapisane dane sięgają {prev} r. – brak najnowszych lat "
+                f"w źródle; zapisane dane pozostają bez zmian."
+            )
+    return out
+
+
 def _frame(values: pd.Series) -> pd.DataFrame:
     idx = pd.Index([int(y) for y in values.index], dtype="int64", name="year")
     return pd.DataFrame({"value": values.to_numpy(dtype="float64")}, index=idx)

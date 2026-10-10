@@ -425,3 +425,30 @@ def test_refresh_write_failure_leaves_store_unchanged(tmp_path, monkeypatch, fai
     assert job.state == "failed" and "disk full" in job.errors["refresh"]
     assert_same(snapshot(store), before)
     assert db.read_bytes() == raw_before
+
+
+# --- final wave: revenues never get shorter than the stored ones (I1) -------------------------
+
+
+def test_refresh_missing_latest_revenue_years_is_rejected(tmp_path):
+    store = Store(str(tmp_path / "t.db"))
+    assert refresh(store, good_clients()).ok
+    assert store.load_series("rev_pit").index.max() == 2025
+    before = snapshot(store)
+
+    res = refresh(store, real_stub_clients(lambda s, df: df.loc[:2024] if s.startswith("rev_") else df))
+
+    assert res.ok is False and set(res.errors) == {"dataset"}
+    msg = res.errors["dataset"]
+    assert "rev_pit" in msg and "2024" in msg and "2025" in msg
+    assert_same(snapshot(store), before)
+
+
+def test_shorter_revenues_accepted_over_synthetic_seed(tmp_path):
+    store = Store(str(tmp_path / "t.db"))
+    longer = pd.DataFrame({"value": [100.0, 110.0]}, index=pd.Index([2025, 2026], dtype="int64", name="year"))
+    for name in ("rev_vat", "rev_cit", "rev_pit"):
+        store.save_series(name, "synthetic", longer)
+    store.set_meta("synthetic", "1")
+    assert refresh(store, good_clients()).ok
+    assert store.load_series("rev_pit").index.max() == 2025
