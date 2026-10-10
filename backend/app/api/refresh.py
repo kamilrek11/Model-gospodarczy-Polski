@@ -118,8 +118,15 @@ class ClientBundle(list):
         self.http_clients = list(http_clients)
 
     def close(self) -> None:
+        """Close every HTTP client even if one close() raises; the first error is re-raised at the end."""
+        first: Exception | None = None
         for h in self.http_clients:
-            h.close()
+            try:
+                h.close()
+            except Exception as e:  # noqa: BLE001 - keep closing the others
+                first = first or e
+        if first is not None:
+            raise first
 
 
 def close_clients(clients) -> None:
@@ -192,15 +199,25 @@ def refresh_disabled() -> bool:
 
 def get_clients() -> ClientBundle:
     """One HTTP client per source; the bundle is closed by RefreshJob.run (or by a rejected POST)."""
-    bdl_http, eu_http, mf_http = (httpx.Client(timeout=HTTP_TIMEOUT, follow_redirects=False) for _ in range(3))
-    return ClientBundle(
-        [
-            GusBdlClient(BDL_BASE_URL, bdl_http, client_id=os.environ.get("BDL_CLIENT_ID") or None),
-            EurostatClient(eu_http),
-            MfBudgetExecutionClient(mf_http, cache_dir()),
-        ],
-        [bdl_http, eu_http, mf_http],
-    )
+    https: list[httpx.Client] = []
+    try:
+        for _ in range(3):
+            https.append(httpx.Client(timeout=HTTP_TIMEOUT, follow_redirects=False))
+        bdl_http, eu_http, mf_http = https
+        return ClientBundle(
+            [
+                GusBdlClient(BDL_BASE_URL, bdl_http, client_id=os.environ.get("BDL_CLIENT_ID") or None),
+                EurostatClient(eu_http),
+                MfBudgetExecutionClient(mf_http, cache_dir()),
+            ],
+            https,
+        )
+    except BaseException:
+        try:
+            ClientBundle([], https).close()  # do not leak the clients already built
+        except Exception:  # noqa: BLE001 - the constructor's error is the one to report
+            pass
+        raise
 
 
 router = APIRouter(prefix="/refresh", tags=["refresh"])

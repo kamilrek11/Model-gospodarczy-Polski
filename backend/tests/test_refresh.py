@@ -460,3 +460,41 @@ def test_shorter_revenues_accepted_over_synthetic_seed(tmp_path):
     store.set_meta("synthetic", "1")
     assert refresh(store, good_clients()).ok
     assert store.load_series("rev_pit").index.max() == 2025
+
+
+class _Closable:
+    def __init__(self, fail: bool = False):
+        self.fail, self.closed = fail, False
+
+    def close(self):
+        self.closed = True
+        if self.fail:
+            raise RuntimeError("close failed")
+
+
+def test_client_bundle_close_continues_after_a_raising_close():
+    hs = [_Closable(), _Closable(fail=True), _Closable()]
+    bundle = ClientBundle([], hs)
+    with pytest.raises(RuntimeError, match="close failed"):
+        bundle.close()
+    assert all(h.closed for h in hs)
+
+
+def test_get_clients_closes_built_http_clients_when_a_constructor_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("BUDGET_DB_PATH", str(tmp_path / "budget.db"))
+    built: list[httpx.Client] = []
+    real_client = httpx.Client
+
+    def tracking(*a, **k):
+        h = real_client(*a, **k)
+        built.append(h)
+        return h
+
+    def broken(*a, **k):
+        raise ValueError("bad config")
+
+    monkeypatch.setattr(refresh_mod.httpx, "Client", tracking)
+    monkeypatch.setattr(refresh_mod, "EurostatClient", broken)
+    with pytest.raises(ValueError, match="bad config"):
+        get_clients()
+    assert len(built) == 3 and all(h.is_closed for h in built)
