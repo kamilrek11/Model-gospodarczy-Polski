@@ -1,7 +1,8 @@
 # Rozpoznanie źródeł danych (GUS BDL, Eurostat, MF) – stan na 2026-10-10
 
 Raport z rozpoznania wykonalności; surowe odpowiedzi były zapisane w katalogu roboczym sesji (nie w repozytorium). Fixtures testowe
-z nagranych odpowiedzi powstają w `backend/tests/fixtures/real/`.
+z nagranych odpowiedzi są w `backend/tests/fixtures/real/`. Wynik pierwszego pełnego odświeżenia na żywo: sekcja
+„Uruchomienie na żywo 2026-10-10” (po macierzy MF).
 
 
 ## 1. Summary table
@@ -109,6 +110,163 @@ Pitfalls found:
 - Size: 2016 (46.3 MB) and 2018 (43.5 MB) exceed 40 MB → the client's default `max_download_bytes` is 60 MB.
 - 2017's `attributes.link` is `https://www.dane.gov.pl/…`, which answers 301 → `https://dane.gov.pl/…` (both allowed hosts).
 - 2015: the 007 workbook is legacy `.xls` and sits one archive deeper (outer → `Tom I i II.zip` wrapper of 38.4 MB → `TOM I_XLS.ZIP`). Only one year is `.xls` (2016+ are `.xlsx`), so `xlrd` was **not** added (rule: only if it unlocks ≥ 4 years); resource 19451 is listed as known-unsupported and is not downloaded (a re-published resource gets a new id and is tried again).
+
+## Uruchomienie na żywo 2026-10-10
+
+Pierwsze pełne odświeżenie z prawdziwych źródeł (GUS BDL, Eurostat, MF/dane.gov.pl) przez produkcyjne `refresh(...)`
+i klienty z `refresh.get_clients()` (to samo okablowanie co `POST /refresh`), potem `simulate` (parametry domyślne,
+horyzont 5) i `backtest` (horyzont 3).
+
+- Data: 2026-10-10, start 21:11 UTC, czas trwania 6 min 31 s (prawie w całości pobieranie archiwów MF).
+- Kod: commit `e2e3466` (HEAD gałęzi `claude/real-data-sources`) + nowy skrypt `backend/scripts/live_refresh_report.py`
+  z zadania 5 (w drzewie roboczym w chwili uruchomienia; dodany w następnym commicie bez zmian w logice odświeżania).
+- Polecenie: `cd backend && .venv/bin/python -m scripts.live_refresh_report --db <scratch>/liverun/live.db --cache-dir <scratch>/live_cache`
+  (baza i cache poza repozytorium, `BDL_CLIENT_ID` nieustawiony).
+- Ruch: BDL 6 żądań, Eurostat 2 żądania, dane.gov.pl lista zasobów + 10 archiwów ZIP (2016–2025, łącznie ok. 211 MB;
+  2015 pominięty bez pobierania). Cache MF po przebiegu: 10 plików JSON (`mf_execution_{2016..2025}.json`, ok. 380 B każdy;
+  tylko wartości, bez archiwów).
+- Wynik: **kod wyjścia 0, odświeżenie udane, wszystkie bramki jakości przeszły**, zapis z `synthetic="0"`.
+- Zgodność z nagraniami: wszystkie wartości na żywo są identyczne z nagranymi fixtures (BDL, Eurostat) i z macierzą MF
+  powyżej (2016–2025, co do grosza w tys. zł) – testy offline działają na danych reprezentatywnych.
+- Testy `pytest -m live` (3 testy: BDL 458271 2024, Eurostat P31_S14 2024, MF VAT 2024 jednego roku) – zielone.
+
+Raport (dosłownie, wyjście skryptu):
+
+```text
+Raport odświeżenia na żywo – 2026-10-10 21:11 UTC
+  commit: e2e3466
+  baza: /tmp/claude-0/-home-user-Model-gospodarczy-Polski/8e7ddd74-c939-5ad7-be8b-d6f9cab8bd80/scratchpad/liverun/live.db
+  cache MF: /tmp/claude-0/-home-user-Model-gospodarczy-Polski/8e7ddd74-c939-5ad7-be8b-d6f9cab8bd80/scratchpad/live_cache
+  BDL_CLIENT_ID: brak (limit anonimowy)
+  symulacja: parametry domyślne, horyzont 5, 2000 ścieżek, seed 20261010
+
+Bramki jakości: OK (wszystkie źródła pobrane, 0 naruszeń; zapisano synthetic=0)
+  (b) konsumpcja / PKB nominalny w 2024 r.: 0.563 (zakres 0.4–0.7)
+  (d) nadwyżka operacyjna GUS BDL vs Eurostat: 24 wspólnych lat (2000–2023), największa różnica 0.48% w 2023 r. (limit 2%)
+Ostrzeżenia źródeł (nie przerywają odświeżenia):
+  - mf_execution: 2015: 2015 report: the 007 workbook is a legacy .xls (BIFF) file inside a doubly nested 38 MB archive; .xls is not supported (no xlrd), see docs/data-sources-discovery.md 'MF – macierz lat' (resource 19451, not downloaded)
+
+Serie w magazynie (mld zł; indeksy jako poziomy; zatrudnienie w etatach; płaca w zł/mies.):
+  pkb_real             gus_bdl           2001–2024 (24 lat)     ostatnie: 2022: 3408.457, 2023: 3415.274, 2024: 3517.732
+  employment           gus_bdl           2005–2024 (20 lat)     ostatnie: 2022: 11032433.000, 2023: 11041289.000, 2024: 11038780.000
+  wage_nominal         gus_bdl           2002–2025 (24 lat)     ostatnie: 2023: 7595.300, 2024: 8630.270, 2025: 9371.110
+  cpi                  gus_bdl           2003–2025 (23 lat)     ostatnie: 2023: 192.595, 2024: 199.529, 2025: 206.712
+  consumption_nominal  eurostat          2000–2025 (26 lat)     ostatnie: 2023: 1934.063, 2024: 2056.557, 2025: 2209.033
+  gross_surplus        gus_bdl+eurostat  2000–2025 (26 lat)     ostatnie: 2023: 1676.697, 2024: 1689.480, 2025: 1765.710
+  gdp_nominal          gus_bdl           2000–2024 (25 lat)     ostatnie: 2022: 3100.850, 2023: 3415.274, 2024: 3653.432
+  rev_vat              mf_execution      2016–2025 (10 lat)     ostatnie: 2023: 244.267, 2024: 287.683, 2025: 321.646
+  rev_cit              mf_execution      2016–2025 (10 lat)     ostatnie: 2023: 67.883, 2024: 60.240, 2025: 63.687
+  rev_pit              mf_execution      2016–2025 (10 lat)     ostatnie: 2023: 91.666, 2024: 97.600, 2025: 28.752
+  wspólne lata makro (pkb_real, employment, wage_nominal, cpi, consumption_nominal): 20 (2005–2024)
+
+Kalibracja (średnia relacja wykonania do wyniku modułu przy obecnym prawie):
+  VAT: współczynnik 1.23334, lata 2023, 2024, 2025
+  CIT: współczynnik 0.207797, lata 2023, 2024, 2025
+  PIT: współczynnik 8.62988e-09, lata 2022, 2023, 2024
+
+Prognoza (mediana, mld zł; parametry domyślne = obecne prawo; horyzont 5 lat od 2025):
+  VAT: wykonanie 2022: 230.391, 2023: 244.267, 2024: 287.683
+    2025: 324.422 (p10–p90 312.549–348.422; wykonanie 321.646)
+    2026: 364.312 (p10–p90 337.979–393.229)
+    2027: 395.444 (p10–p90 356.653–437.908)
+    2028: 436.478 (p10–p90 383.160–503.437)
+    2029: 485.506 (p10–p90 413.461–575.841)
+  CIT: wykonanie 2022: 70.137, 2023: 67.883, 2024: 60.240
+    2025: 72.537 (p10–p90 70.257–78.390; wykonanie 63.687)
+    2026: 82.792 (p10–p90 77.400–89.439)
+    2027: 91.142 (p10–p90 82.795–101.413)
+    2028: 101.914 (p10–p90 89.528–117.499)
+    2029: 114.418 (p10–p90 97.306–136.338)
+  PIT: wykonanie 2022: 68.107, 2023: 91.666, 2024: 97.600
+    2025: 128.341 (p10–p90 116.514–134.081; wykonanie 28.752)
+    2026: 151.921 (p10–p90 133.463–169.951)
+    2027: 180.538 (p10–p90 149.896–213.926)
+    2028: 214.076 (p10–p90 169.891–269.507)
+    2029: 253.383 (p10–p90 192.375–334.529)
+
+Backtest (origins: 5, pominięte: 3; horyzont 3 lata, mediana vs wykonanie):
+  VAT: MAPE 10.12%, pokrycie 80% 21%, pokrycie 95% 43%
+  CIT: MAPE 28.45%, pokrycie 80% 7%, pokrycie 95% 7%
+  PIT: MAPE 14.13%, pokrycie 80% 33%, pokrycie 95% 42%
+  uwaga: Backtest liczy lata historyczne przy obecnym prawie podatkowym (domyślne parametry), nie przy prawie obowiązującym w danym roku.
+  uwaga: MAPE w procentach; pokrycie jako ułamek realizacji w przedziałach 80% (p10-p90) i 95% (p2,5-p97,5).
+  uwaga: Pominięto 3 lat startowych (brak dopasowania modelu) - wyniki opierają się na pozostałych latach.
+  uwaga: PIT w budżecie państwa: zmiana zasad podziału od 2025 r. (reforma finansowania JST); kalibracja do 2024; wykonanie 2025 nie jest porównywalne z prognozą przy dotychczasowych zasadach.
+  uwaga: Realizacje rev_pit od 2025 r. nie są oceniane w backteście (załamanie strukturalne).
+
+Załamanie PIT 2025:
+  wykonanie PIT w budżecie państwa 2024: 97.600, 2025: 28.752 mld zł (-70.5%) – reforma finansowania JST (większy udział JST w PIT)
+  kalibracja PIT używa tylko lat < 2025: 2022, 2023, 2024
+  backtest nie ocenia realizacji rev_pit od 2025 r.
+  prognoza PIT jest liczona według zasad podziału sprzed reformy – nieporównywalna z wykonaniem od 2025 r.
+```
+
+Uwagi do raportu:
+- „Pominięto 3 lat startowych” w backteście: lata startowe 2016–2018 mają 12–14 wspólnych lat makro (od 2005), a VAR
+  wymaga co najmniej 15 obserwacji (`MIN_OBS`); `min_train=12` backtestu jest niższe niż ten próg. Ocenione lata startowe:
+  2019–2023 (cele 2020–2025; PIT tylko do 2024).
+- Kalibracja VAT i CIT obejmuje rok 2025 (konsumpcja i nadwyżka operacyjna z Eurostatu oraz wykonanie MF są już za 2025),
+  choć ostatni rok modelu makro to 2024 (BDL: PKB realny i zatrudnienie kończą się na 2024). Porównanie prognozy 2025 VAT/CIT
+  z wykonaniem 2025 nie jest więc testem poza próbą.
+- Seria `gross_surplus` = GUS BDL 2000–2023 + Eurostat 2024–2025 (`gus_bdl+eurostat`).
+
+### Wiarygodność prognozy – obserwacje
+
+Analiza (bez zmian w modelu) na bazie z przebiegu na żywo; skrypt analityczny poza repozytorium odtwarza `_prepare`,
+`simulate_levels` i moduły podatkowe z tym samym ziarnem (20261010). „Masa płac” = `wage_nominal × employment × 12`
+(zł/mies. × etaty; BDL bez małych podmiotów), tylko jako punkt odniesienia – model używa jej w skali względnej.
+
+**PIT.** Współczynnik kalibracji 8,63·10⁻⁹ (moduł liczy w jednostkach „zł/mies. × etaty”, więc liczba sama w sobie nie ma
+interpretacji), lata 2022, 2023, 2024 (2025 wyłączony przez załamanie). Relacja wykonanie/moduł w tych latach:
+8,51 / 9,34 / 8,04 (×10⁻⁹); w 2016 była 15,20 i spada monotonicznie (z wyjątkiem 2023).
+
+| rok | masa płac (mld zł/rok) | PIT wykonanie | PIT / masa płac (wykonanie) | efektywna stawka skali w module (rozkład zastępczy) | PIT modelu / masa płac (po kalibracji) |
+|---|---|---|---|---|---|
+| 2016 | 521,1 | 48,23 | 9,26% | 3,59% | 5,26% |
+| 2017 | 565,7 | 52,67 | 9,31% | 4,03% | 5,59% |
+| 2018 | 615,3 | 59,56 | 9,68% | 4,51% | 5,97% |
+| 2019 | 671,5 | 65,44 | 9,75% | 5,06% | 6,40% |
+| 2020 | 709,3 | 63,80 | 9,00% | 5,39% | 6,66% |
+| 2021 | 783,1 | 73,61 | 9,40% | 5,97% | 7,11% |
+| 2022 | 887,8 | 68,11 | 7,67% | 6,82% | 7,78% |
+| 2023 | 1006,3 | 91,67 | 9,11% | 7,63% | 8,42% |
+| 2024 | 1143,2 | 97,60 | 8,54% | 8,59% | 9,16% |
+
+Rozkład skoku mediany PIT 2025 (128,34) względem wykonania 2024 (97,60) – ×1,315 (+31,5%):
+1. **Okno kalibracji ×1,073**: współczynnik to średnia z 2022–2024, a relacja w 2024 jest najniższa z trzech, więc model już
+   w 2024 daje 104,8 zamiast 97,6 mld zł (+7,3%). Rok 2022 (obniżka PIT w połowie roku) i 2023 podnoszą średnią.
+2. **Wzrost bazy ×1,135**: mediana VAR dla 2025 – płaca nominalna +11,1%, zatrudnienie +1,6%. Wykonanie 2025 w BDL: płaca
+   +8,6% (zatrudnienia za 2025 brak). VAR (1 opóźnienie) przenosi wysoki wzrost płac z 2024 (+13,6%) na 2025.
+3. **Progresja w rozkładzie zastępczym („bracket creep”) ×1,079**: efektywna stawka skali rośnie z 8,59% do 9,52% (mediana)
+   przy +13,5% bazy. Elastyczność efektywnej stawki względem bazy w punkcie zakotwiczenia = 0,85, czyli elastyczność części
+   skali PIT względem bazy ≈ 1,85 (część liniowa/ryczałt: 0,034 na jednostkę masy płac, część skali: 0,093). W kolejnych latach
+   stawka rośnie dalej (10,4% / 11,3% / 12,3% / 13,3% w 2026–2029), stąd mediana 253 mld zł w 2029 (×2,6 względem 2024).
+   W danych historycznych (przy zmieniającym się prawie) relacja PIT/masa płac jest płaska (9,3% → 8,5%), a moduł przy obecnym
+   prawie podwaja efektywną stawkę między 2016 a 2024 – spadająca relacja wykonanie/moduł (15,2 → 8,0) to ten sam efekt.
+
+Kontrfakty: przy faktycznej płacy 2025 (+8,58%) i zatrudnieniu 2024 PIT 2025 = 119,4 (+22,3%); dodatkowo z relacją kalibracji
+tylko z 2024 – 111,2 (+14,0%). Nawet wtedy wzrost PIT jest ~1,6× wzrostu bazy, co wynika z rozkładu zastępczego
+(`PIT_INCOME_DIST_DEFAULT`, PLACEHOLDER-UNVERIFIED: 3 mln podatników z dochodem 5 tys. zł, duża masa w pobliżu kwoty wolnej
+30 tys. zł) i stałych progów. Część progresji jest realna (progi w Polsce nie są indeksowane), ale jej skala w modelu nie jest
+zweryfikowana – rozkład z danych MF (tylko PDF do 2021) jest warunkiem wiarygodnej prognozy PIT.
+
+**VAT.** Współczynnik 1,2333 (lata 2023–2025; relacje wykonanie/moduł 1,135 / 1,257 / 1,308). Mediana 2025 = 324,4 vs
+wykonanie 2025 = 321,6 (−0,9%) – trafienie przypadkowe: VAR daje medianę konsumpcji nominalnej +14,9% w 2025, a Eurostat
+pokazuje +7,4%; przy faktycznej konsumpcji 2025 model dałby 303,2 (−5,7%), bo współczynnik (średnia trzech lat) jest niższy od
+relacji 2025. Względem wykonania 2024: ×1,128 = poziom kalibracji 0,981 × wzrost konsumpcji 1,149. Moduł VAT jest liniowy
+w konsumpcji (brak progresji).
+
+**CIT.** Współczynnik 0,2078 (lata 2023–2025; relacje 0,225 / 0,198 / 0,200). Mediana 2025 = 72,5 vs wykonanie 2025 = 63,7
+(+13,9%). Względem 2024: ×1,204 = poziom kalibracji 1,049 × wzrost nadwyżki 1,148. Nadwyżka w projekcji rośnie jak nominalny
+PKB z VAR (mediana 2025: realny PKB +6,6%, CPI +8,5% → +14,8%), a faktycznie: nadwyżka (Eurostat) +4,5%, CPI (BDL) +3,6%.
+Przy faktycznej nadwyżce 2025 model dałby 66,0 (+3,7%).
+
+**Wspólny czynnik.** Mediana VAR dla 2025 jest wyraźnie powyżej średnich z próby 2005–2024 (płaca +6,7%, CPI +3,4%,
+konsumpcja +6,5%, PKB realny +3,7% rocznie) i powyżej wykonania 2025 – szok płacowo-cenowy 2022–2024 ciągnie ścieżki w górę.
+Dla VAT i CIT to główne źródło odchylenia; dla PIT nakłada się na progresję rozkładu zastępczego i okno kalibracji. Backtest
+(MAPE: VAT 10,1%, CIT 28,5%, PIT 14,1%; pokrycie 80%: 21% / 7% / 33%) potwierdza, że pasma niepewności są za wąskie.
+Wnioski dla ekonomisty (poza zakresem tego zadania): rozkład dochodów PIT z danych MF, okno kalibracji (np. tylko ostatni rok
+lub ważenie), specyfikacja VAR (liczba opóźnień, okres próby), szerokość pasm.
 
 ## C. PIT income distribution
 dane.gov.pl dataset **191** "Informacje dotyczące rozliczenia podatku dochodowego od osób fizycznych" — 14 resources, **PDF only**, years 2008–2021 (e.g. 2021: https://api.dane.gov.pl/media/resources/20230102/INFORMACJA_PIT_za_2021.pdf). Contains the taxpayers-by-bracket tables, but not machine-readable (PDF table extraction needed). Sister dataset 162 (CIT) notes "Począwszy od 2022 r. informacje publikowane są wyłącznie na stronie podatki.gov.pl" — likely same for PIT (podatki.gov.pl page fetched but returned a 955-byte shell; formats there unverified).
