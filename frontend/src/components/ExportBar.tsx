@@ -3,6 +3,7 @@ import { ApiError, exportData, type ExportFormat } from "../api/client";
 import type { SimulationResult } from "../api/types";
 import { chartToPng } from "../export/chartImage";
 import { downloadBlob } from "../export/download";
+import { provenanceLines } from "../export/provenance";
 
 interface Props {
   result: SimulationResult | null;
@@ -40,7 +41,8 @@ export function ExportBar({ result, params, getCharts }: Props) {
   const charts = async () => {
     const svgs = getCharts();
     if (svgs.length === 0) throw new Error("Brak wykresu do wyeksportowania.");
-    return Promise.all(svgs.map((s) => chartToPng(s)));
+    const footer = result ? provenanceLines(result).join(" · ") : undefined;
+    return Promise.all(svgs.map((s) => chartToPng(s, undefined, undefined, footer)));
   };
 
   const png = () =>
@@ -53,7 +55,7 @@ export function ExportBar({ result, params, getCharts }: Props) {
     run("pdf", async () => {
       const all = await charts();
       const { chartsToPdf } = await import("../export/pdf");
-      downloadBlob(await chartsToPdf(all, PDF_TITLE), "wykresy.pdf");
+      downloadBlob(await chartsToPdf(all, PDF_TITLE, result ? provenanceLines(result) : []), "wykresy.pdf");
     });
 
   return (

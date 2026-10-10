@@ -19,9 +19,12 @@ export function svgSize(svg: Element): { width: number; height: number } {
   return { width: Math.ceil(width) || 600, height: Math.ceil(height) || 340 };
 }
 
-/** Samodzielny dokument SVG: bez zmiennych CSS, z tłem i rozmiarem. */
-export function prepareSvg(svg: Element, getVar: (name: string) => string): { markup: string; width: number; height: number } {
-  const { width, height } = svgSize(svg);
+export const FOOTER_HEIGHT = 22;
+
+/** Samodzielny dokument SVG: bez zmiennych CSS, z tłem i rozmiarem; opcjonalna stopka (pochodzenie danych) pod wykresem. */
+export function prepareSvg(svg: Element, getVar: (name: string) => string, footer?: string): { markup: string; width: number; height: number } {
+  const { width, height: chartHeight } = svgSize(svg);
+  const height = footer ? chartHeight + FOOTER_HEIGHT : chartHeight;
   const clone = svg.cloneNode(true) as Element;
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   clone.setAttribute("width", String(width));
@@ -33,6 +36,15 @@ export function prepareSvg(svg: Element, getVar: (name: string) => string): { ma
   rect.setAttribute("height", "100%");
   rect.setAttribute("fill", bg);
   clone.insertBefore(rect, clone.firstChild);
+  if (footer) {
+    const text = clone.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "text");
+    text.setAttribute("x", "8");
+    text.setAttribute("y", String(height - 7));
+    text.setAttribute("font-size", "11");
+    text.setAttribute("fill", getVar("--text-secondary").trim() || "#52514e");
+    text.textContent = footer;
+    clone.appendChild(text);
+  }
   const markup = resolveCssVars(new XMLSerializer().serializeToString(clone), getVar);
   return { markup, width, height };
 }
@@ -72,7 +84,7 @@ export interface ChartPng {
   height: number;
 }
 
-export async function chartToPng(svg: Element, rasterize: typeof rasterizeSvg = rasterizeSvg, getVar = cssVarReader()): Promise<ChartPng> {
-  const { markup, width, height } = prepareSvg(svg, getVar);
+export async function chartToPng(svg: Element, rasterize: typeof rasterizeSvg = rasterizeSvg, getVar = cssVarReader(), footer?: string): Promise<ChartPng> {
+  const { markup, width, height } = prepareSvg(svg, getVar, footer);
   return { blob: await rasterize(markup, width, height), width, height };
 }
