@@ -1,0 +1,17 @@
+body { margin: 0; font-family: system-ui, sans-serif; color: #1a1a1a; background: #fafafa; }
+.topbar { padding: 0.75rem 1.25rem; background: #0b3d6e; color: #fff; }
+.topbar h1 { margin: 0; font-size: 1.25rem; }
+.layout { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; min-height: calc(100vh - 3rem); }
+.sidebar { padding: 1rem; border-right: 1px solid #ddd; overflow-y: auto; max-height: calc(100vh - 3rem); }
+.content { padding: 1rem; }
+.tax-section { margin: 0.75rem 0; }
+.tax-section summary { font-weight: 600; cursor: pointer; }
+.param-row { margin: 0.75rem 0; }
+.param-row.deviates { border-left: 3px solid #d97706; padding-left: 0.5rem; }
+.deviation-marker { color: #b45309; font-size: 0.8rem; margin-left: 0.5rem; }
+.controls { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.controls input[type="text"] { width: 5rem; }
+.controls input[type="range"] { flex: 1; min-width: 6rem; }
+.error { color: #b91c1c; font-size: 0.85rem; }
+small { color: #555; display: block; }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid #0b3d6e; outline-offset: 2px; }
