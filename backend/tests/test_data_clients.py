@@ -95,3 +95,35 @@ def test_execution_client_errors_and_unmapped():
         ExecutionClient(HttpJsonLoader({}, http), series=("rev_pit",)).fetch()
     with pytest.raises(SourceError, match="series not mapped"):
         ExecutionClient(HttpJsonLoader({"rev_pit": "TODO_VERIFY_URL"}, http), series=("rev_pit",)).fetch()
+
+
+def test_gus_client_malformed_bodies_raise_source_error():
+    good = load("synthetic_bdl_page2.json")
+    bad_val = json.loads(json.dumps(good)); bad_val["results"][0]["values"][0]["val"] = "abc"
+    bad_year = json.loads(json.dumps(good)); del bad_year["results"][0]["values"][0]["year"]
+    bad_year2 = json.loads(json.dumps(good)); bad_year2["results"][0]["values"][0]["year"] = "x"
+    bad_results = {"results": "nope"}
+    for body in (bad_val, bad_year, bad_year2, bad_results, [1, 2]):
+        with pytest.raises(SourceError) as e:
+            client(lambda r, b=body: httpx.Response(200, json=b)).fetch()
+        assert e.value.source == "gus_bdl"
+
+
+def test_gus_client_empty_series_raises():
+    body = load("synthetic_bdl_page2.json")
+    body["results"][0]["values"] = [{"year": "2022", "val": None, "attrId": 1}]
+    with pytest.raises(SourceError, match="no data"):
+        client(lambda r: httpx.Response(200, json=body)).fetch()
+
+
+def test_gus_client_unit_match_case_insensitive():
+    body = load("synthetic_bdl_page2.json")
+    body["results"][0]["name"] = "POLSKA"
+    assert list(client(lambda r: httpx.Response(200, json=body)).fetch()["pkb_real"].index) == [2022]
+
+
+def test_execution_client_empty_series_raises():
+    http = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"rows": []})))
+    with pytest.raises(SourceError, match="no data") as e:
+        ExecutionClient(HttpJsonLoader({"rev_pit": "https://x.test/pit"}, http), series=("rev_pit",)).fetch()
+    assert e.value.source == "execution"

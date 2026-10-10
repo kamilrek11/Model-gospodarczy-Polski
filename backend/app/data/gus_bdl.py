@@ -39,15 +39,19 @@ class GusBdlClient:
         found_unit = False
         for _ in range(MAX_PAGES):
             body = self._get(url, params)
-            for res in body.get("results", []):
-                if res.get("name") != unit:
-                    continue
-                found_unit = True
-                for v in res.get("values", []):
-                    if v.get("val") is None:
+            try:
+                for res in body["results"]:
+                    # TODO_VERIFY: confirm national unit name/id ("Polska"/"POLSKA", id 000000000000?) on live API
+                    if str(res["name"]).casefold() != str(unit).casefold():
                         continue
-                    rows[int(v["year"])] = float(v["val"])
-            nxt = (body.get("links") or {}).get("next")
+                    found_unit = True
+                    for v in res["values"]:
+                        if v.get("val") is None:
+                            continue
+                        rows[int(v["year"])] = float(v["val"])
+                nxt = (body.get("links") or {}).get("next")
+            except (KeyError, TypeError, ValueError, AttributeError) as e:
+                raise SourceError(self.name, f"malformed response for {series}: {e!r}") from e
             if not nxt:
                 break
             url, params = nxt, None  # next link is absolute and carries its own query
@@ -55,6 +59,8 @@ class GusBdlClient:
             raise SourceError(self.name, f"too many pages for {series}")
         if not found_unit:
             raise SourceError(self.name, f"unit {unit!r} not found for {series}")
+        if not rows:
+            raise SourceError(self.name, f"no data for {series}")
         return to_frame(list(rows.items()))
 
     def fetch(self) -> dict[str, pd.DataFrame]:

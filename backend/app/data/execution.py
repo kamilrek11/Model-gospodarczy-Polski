@@ -49,6 +49,8 @@ class ExecutionClient:
         for s in self.series:
             try:
                 rows = self.loader.load(s)
+                if not rows:
+                    raise SourceError(SOURCE, f"no data for {s}")
                 out[s] = to_frame([(int(r["year"]), float(r["value"])) for r in rows])
             except SourceError:
                 raise
