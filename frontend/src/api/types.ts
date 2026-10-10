@@ -85,3 +85,19 @@ export interface RefreshStatus {
   errors: Record<string, string>;
   updated_at: string | null;
 }
+
+/** GET /backtest – MAPE w %, pokrycie jako ułamek (0-1), klucze = podatki. */
+export interface BacktestResult {
+  mape: Partial<Record<TaxKey, number>>;
+  coverage80: Partial<Record<TaxKey, number>>;
+  coverage95: Partial<Record<TaxKey, number>>;
+  notes: string[];
+  message: string | null;
+  n_origins: number;
+  n_skipped: number;
+}
+
+export interface ExportRequest {
+  params: Record<string, number>;
+  result: SimulationResult;
+}

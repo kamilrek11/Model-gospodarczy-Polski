@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  // Recharts dominates the main chunk (~650 kB); jsPDF is lazy-loaded in its own chunk.
+  build: { chunkSizeWarningLimit: 700 },
   server: {
     proxy: {
       "/api": {

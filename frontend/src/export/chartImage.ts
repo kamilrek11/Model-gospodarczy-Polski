@@ -1,0 +1,78 @@
+/** Eksport wykresu (SVG z Recharts) do PNG; czyste części są testowalne bez canvasu. */
+
+const VAR_RE = /var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+?))?\s*\)/g;
+
+/** Podmienia var(--x[, fallback]) na konkretne wartości (SVG poza stroną nie widzi zmiennych CSS). */
+export function resolveCssVars(svg: string, getVar: (name: string) => string): string {
+  return svg.replace(VAR_RE, (_m, name: string, fallback?: string) => getVar(name).trim() || fallback?.trim() || "#000000");
+}
+
+export function svgSize(svg: Element): { width: number; height: number } {
+  const num = (v: string | null) => {
+    const n = v === null ? NaN : parseFloat(v);
+    return Number.isFinite(n) && n > 0 ? n : NaN;
+  };
+  const rect = svg.getBoundingClientRect();
+  const vb = svg.getAttribute("viewBox")?.split(/[\s,]+/).map(Number);
+  const width = num(svg.getAttribute("width")) || rect.width || (vb && vb[2]) || 0;
+  const height = num(svg.getAttribute("height")) || rect.height || (vb && vb[3]) || 0;
+  return { width: Math.ceil(width) || 600, height: Math.ceil(height) || 340 };
+}
+
+/** Samodzielny dokument SVG: bez zmiennych CSS, z tłem i rozmiarem. */
+export function prepareSvg(svg: Element, getVar: (name: string) => string): { markup: string; width: number; height: number } {
+  const { width, height } = svgSize(svg);
+  const clone = svg.cloneNode(true) as Element;
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("width", String(width));
+  clone.setAttribute("height", String(height));
+  clone.setAttribute("font-family", getVar("--font-family") || "system-ui, sans-serif");
+  const bg = getVar("--surface-1").trim() || "#ffffff";
+  const rect = clone.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "rect");
+  rect.setAttribute("width", "100%");
+  rect.setAttribute("height", "100%");
+  rect.setAttribute("fill", bg);
+  clone.insertBefore(rect, clone.firstChild);
+  const markup = resolveCssVars(new XMLSerializer().serializeToString(clone), getVar);
+  return { markup, width, height };
+}
+
+export const cssVarReader = (): ((name: string) => string) => {
+  const style = getComputedStyle(document.documentElement);
+  return (name) => style.getPropertyValue(name);
+};
+
+/** Jedyne miejsce używające canvasu/Image – w testach podmieniane. */
+export function rasterizeSvg(markup: string, width: number, height: number, scale = 2): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([markup], { type: "image/svg+xml;charset=utf-8" }));
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement("canvas");
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Przeglądarka nie obsługuje eksportu obrazu."));
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Nie udało się wygenerować obrazu."))), "image/png");
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Nie udało się wygenerować obrazu wykresu."));
+    };
+    img.src = url;
+  });
+}
+
+export interface ChartPng {
+  blob: Blob;
+  width: number;
+  height: number;
+}
+
+export async function chartToPng(svg: Element, rasterize: typeof rasterizeSvg = rasterizeSvg, getVar = cssVarReader()): Promise<ChartPng> {
+  const { markup, width, height } = prepareSvg(svg, getVar);
+  return { blob: await rasterize(markup, width, height), width, height };
+}

@@ -1,4 +1,4 @@
-import type { ApiErrorKind, HistoryData, ParamSpec, RefreshStatus, SimulateRequest, SimulationResult } from "./types";
+import type { ApiErrorKind, BacktestResult, ExportRequest, HistoryData, ParamSpec, RefreshStatus, SimulateRequest, SimulationResult } from "./types";
 
 export class ApiError extends Error {
   kind: ApiErrorKind;
@@ -58,4 +58,31 @@ export function getRefreshStatus(signal?: AbortSignal): Promise<RefreshStatus> {
 
 export function getHistory(signal?: AbortSignal): Promise<HistoryData> {
   return request<HistoryData>("/history", { signal });
+}
+
+export function getBacktest(signal?: AbortSignal): Promise<BacktestResult> {
+  return request<BacktestResult>("/backtest", { signal });
+}
+
+export type ExportFormat = "csv" | "xlsx";
+
+/** POST /export – zwraca plik jako Blob; nazwę podaje serwer (Content-Disposition). */
+export async function exportData(format: ExportFormat, body: ExportRequest): Promise<{ blob: Blob; filename: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/export?format=${format}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError("network", "Brak połączenia z serwerem");
+  }
+  if (res.ok) {
+    const m = /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") ?? "");
+    return { blob: await res.blob(), filename: m?.[1] ?? `symulacja.${format}` };
+  }
+  if (res.status === 413) throw new ApiError("invalid", await detailOf(res, "Żądanie zbyt duże do eksportu (maks. 1 MB)."));
+  if (res.status === 422) throw new ApiError("invalid", await detailOf(res, "Nieprawidłowy wynik symulacji – nie można go wyeksportować."));
+  throw new ApiError("server", await detailOf(res, `Błąd serwera (${res.status})`));
 }

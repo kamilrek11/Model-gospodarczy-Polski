@@ -1,17 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getParameters } from "./api/client";
 import type { ParamSpec } from "./api/types";
 import type { TaxKey } from "./api/types";
 import { BudgetStack } from "./charts/BudgetStack";
 import { ForecastVsActual } from "./charts/ForecastVsActual";
+import { CompareView } from "./components/CompareView";
 import { ChartSkeleton } from "./components/ChartSkeleton";
 import { DisabledNotice } from "./components/DisabledNotice";
 import { EmptyState } from "./components/EmptyState";
+import { ExportBar } from "./components/ExportBar";
 import { ParameterPanel } from "./components/ParameterPanel";
+import { QualityTab } from "./components/QualityTab";
+import { ScenarioBar } from "./components/ScenarioBar";
 import { StatusBanner } from "./components/StatusBanner";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { useHistory } from "./state/useHistory";
 import { useRefresh } from "./state/useRefresh";
 import { useSimulation } from "./state/useSimulation";
+
+type TabId = "sim" | "compare" | "quality";
+const TABS: { id: TabId; label: string }[] = [
+  { id: "sim", label: "Symulacja" },
+  { id: "compare", label: "Porównanie scenariuszy" },
+  { id: "quality", label: "Jakość modelu" },
+];
 
 export default function App() {
   const [schema, setSchema] = useState<ParamSpec[] | null>(null);
@@ -36,6 +48,15 @@ export default function App() {
   const onChange = useCallback((key: string, value: number) => setOverrides((o) => ({ ...o, [key]: value })), []);
   const onReset = useCallback(() => setOverrides({}), []);
 
+  const knownKeys = useMemo(() => new Set((schema ?? []).map((p) => p.key)), [schema]);
+  const onLoadScenario = useCallback(
+    (params: Record<string, number>) => setOverrides(Object.fromEntries(Object.entries(params).filter(([k]) => knownKeys.has(k)))),
+    [knownKeys],
+  );
+  const [tab, setTab] = useState<TabId>("sim");
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const getCharts = useCallback(() => Array.from(resultsRef.current?.querySelectorAll(".chart-frame svg.recharts-surface") ?? []), []);
+
   const [tax, setTax] = useState<TaxKey>("pit");
   const [reloadKey, setReloadKey] = useState(0);
   const onRefreshDone = useCallback(() => setReloadKey((k) => k + 1), []);
@@ -51,26 +72,44 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <h1>Symulator wpływów budżetowych</h1>
+        <ThemeToggle />
       </header>
       <div className="layout">
         <aside className="sidebar" aria-label="Parametry">
           {loadError && <p role="alert">{loadError}</p>}
           {schema && <ParameterPanel schema={schema} values={values} onChange={onChange} onReset={onReset} />}
+          {schema && <ScenarioBar params={values} knownKeys={knownKeys} onLoad={onLoadScenario} />}
         </aside>
         <main className="content">
           <StatusBanner error={otherError?.kind === "invalid" ? null : otherError} status={refresh.status} updatedAt={updatedAt} onRefresh={refresh.start} />
-          {error?.kind === "invalid" && <p role="alert">{error.message}</p>}
-          {noData ? (
-            <EmptyState status={refresh.status} onRefresh={refresh.start} />
-          ) : result && history ? (
-            <div className={loading ? "results stale" : "results"} aria-busy={loading}>
-              <DisabledNotice modules={result.disabled_modules} />
-              <ForecastVsActual tax={tax} history={history} sim={result} onTaxChange={setTax} />
-              <BudgetStack sim={result} history={history} />
-            </div>
-          ) : (
-            <ChartSkeleton />
-          )}
+          <div className="tabs" role="tablist" aria-label="Widoki">
+            {TABS.map((t) => (
+              <button key={t.id} type="button" role="tab" id={`tab-${t.id}`} aria-selected={tab === t.id} aria-controls={`panel-${t.id}`} onClick={() => setTab(t.id)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+            {tab === "sim" && (
+              <>
+                <ExportBar result={result} params={values} getCharts={getCharts} />
+                {error?.kind === "invalid" && <p role="alert">{error.message}</p>}
+                {noData ? (
+                  <EmptyState status={refresh.status} onRefresh={refresh.start} />
+                ) : result && history ? (
+                  <div ref={resultsRef} className={loading ? "results stale" : "results"} aria-busy={loading}>
+                    <DisabledNotice modules={result.disabled_modules} />
+                    <ForecastVsActual tax={tax} history={history} sim={result} onTaxChange={setTax} />
+                    <BudgetStack sim={result} history={history} />
+                  </div>
+                ) : (
+                  <ChartSkeleton />
+                )}
+              </>
+            )}
+            {tab === "compare" && <CompareView />}
+            {tab === "quality" && <QualityTab sim={result} refreshKey={reloadKey} />}
+          </div>
         </main>
       </div>
     </div>
