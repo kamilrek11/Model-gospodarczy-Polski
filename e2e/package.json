@@ -1,0 +1,14 @@
+{
+  "name": "symulator-budzetu-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:app": "npm --prefix ../frontend run build",
+    "test": "npm run build:app && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "22.10.2"
+  }
+}
