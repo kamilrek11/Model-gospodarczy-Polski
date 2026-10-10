@@ -7,8 +7,9 @@ import { INK, TAX_LABEL, TAX_ORDER } from "../charts/palette";
 import { fmtAxis, fmtMld, fmtPct, fmtSignedMld } from "../format";
 import { compare } from "../scenarios/compare";
 import { listScenarios, sanitizeParams, type ParamLimits } from "../scenarios/store";
+import { SIMULATION_SEED } from "../state/useSimulation";
 
-const SEED = 1; // wspólne losowania dla obu scenariuszy – różnice pochodzą z parametrów
+const SEED = SIMULATION_SEED; // wspólne losowania dla obu scenariuszy i widoku Symulacja – różnice pochodzą z parametrów
 
 interface Pair {
   a: { name: string; result: SimulationResult };

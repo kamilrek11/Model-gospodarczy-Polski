@@ -5,6 +5,7 @@ import type { TaxKey } from "./api/types";
 import { BudgetStack } from "./charts/BudgetStack";
 import { ForecastVsActual } from "./charts/ForecastVsActual";
 import { CompareView } from "./components/CompareView";
+import { DataInfo } from "./components/DataInfo";
 import { ChartSkeleton } from "./components/ChartSkeleton";
 import { DisabledNotice } from "./components/DisabledNotice";
 import { EmptyState } from "./components/EmptyState";
@@ -13,6 +14,7 @@ import { ParameterPanel } from "./components/ParameterPanel";
 import { QualityTab } from "./components/QualityTab";
 import { ScenarioBar } from "./components/ScenarioBar";
 import { StatusBanner } from "./components/StatusBanner";
+import { SyntheticBanner } from "./components/SyntheticBanner";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useHistory } from "./state/useHistory";
 import { useRefresh } from "./state/useRefresh";
@@ -65,11 +67,15 @@ export default function App() {
   const noData = error?.kind === "no-data" || (historyError?.kind === "no-data" && !history);
   const otherError = error && error.kind !== "no-data" ? error : historyError && historyError.kind !== "no-data" ? historyError : null;
   const updatedAt = result?.data_updated_at ?? refresh.status?.updated_at ?? null;
+  // Najświeższa znana informacja: wynik symulacji, potem historia, potem status odświeżania.
+  const synthetic = result?.synthetic ?? history?.synthetic ?? refresh.status?.synthetic ?? false;
 
   return (
     <div className="app">
+      <SyntheticBanner synthetic={synthetic} />
       <header className="topbar">
         <h1>Symulator wpływów budżetowych</h1>
+        <DataInfo updatedAt={updatedAt} modelVersion={result?.model_version ?? null} status={refresh.status} onRefresh={refresh.start} />
         <ThemeToggle />
       </header>
       <div className="layout">

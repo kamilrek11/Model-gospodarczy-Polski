@@ -58,7 +58,10 @@ export interface HistoryPoint {
 }
 
 /** GET /history – mld zł; podatek bez danych jest pominięty. */
-export type HistoryData = Partial<Record<TaxKey, HistoryPoint[]>>;
+export type HistoryData = Partial<Record<TaxKey, HistoryPoint[]>> & {
+  /** true: dane zasiane syntetycznie (nie GUS/MF). */
+  synthetic?: boolean;
+};
 
 export interface SimulationResult {
   years: number[];
@@ -72,6 +75,8 @@ export interface SimulationResult {
   disabled_modules: DisabledModule[];
   model_version?: string;
   data_updated_at?: string | null;
+  /** true: wynik policzony na danych syntetycznych (meta synthetic == "1"). */
+  synthetic?: boolean;
 }
 
 export interface SimulateRequest {
@@ -87,6 +92,7 @@ export interface RefreshStatus {
   state: "idle" | "running" | "done" | "failed";
   errors: Record<string, string>;
   updated_at: string | null;
+  synthetic?: boolean;
 }
 
 /** GET /backtest – MAPE w %, pokrycie jako ułamek (0-1), klucze = podatki. */

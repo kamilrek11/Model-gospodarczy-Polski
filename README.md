@@ -44,6 +44,9 @@ BUDGET_DB_PATH=/sciezka/do/demo.db .venv/bin/python -m uvicorn app.main:app
 GUS/MF/ZUS/Eurostat.** Skrypt odmawia działania bez `SEED_FIXTURES=1` i bez jawnego `--db`, a także gdy rozwiązana ścieżka (realpath) wskazuje
 domyślną bazę aplikacji lub `$BUDGET_DB_PATH`, albo gdy plik już istnieje i nie jest oznaczony jako syntetyczny
 (`meta.synthetic = "1"`); zapisuje w bazie `meta.synthetic = "1"` i wypisuje ostrzeżenie.
+API (`/simulate`, `/history`, `/refresh/status`) zwraca `synthetic: true`, a interfejs pokazuje wtedy stały baner
+„DANE SYNTETYCZNE – nie są to dane GUS/MF"; znacznik trafia też do eksportów (CSV/XLSX: blok/arkusz „Metadane", PNG: stopka,
+PDF: notka). Udane odświeżenie z prawdziwych źródeł zapisuje `meta.synthetic = "0"` w tej samej transakcji co dane.
 
 ### Testy end-to-end (Playwright)
 

@@ -159,3 +159,8 @@ button.primary:disabled { opacity: 0.6; cursor: progress; }
 .kv-list { list-style: none; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; padding: 0; margin: 0.25rem 0; font-variant-numeric: tabular-nums; }
 .assumption-data { margin: 0.25rem 0; }
 .assumption-data summary { cursor: pointer; }
+.synthetic-banner { padding: 0.5rem 1.25rem; background: var(--warn-bg); color: var(--warn-fg); border-bottom: 3px solid var(--warn-border); font-size: 0.95rem; }
+.synthetic-banner strong { letter-spacing: 0.02em; }
+.data-info { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; font-size: 0.85rem; margin-left: auto; }
+.data-info .refresh-failed { font-weight: 700; text-decoration: underline; }
+.topbar .data-info button.primary { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.6); }

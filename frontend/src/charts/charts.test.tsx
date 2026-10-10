@@ -156,8 +156,10 @@ describe("App states", () => {
       }),
     );
     render(<App />);
-    expect(await screen.findByText(/brak danych/i)).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Odśwież dane" })).toBeEnabled();
+    const empty = (await screen.findByText(/brak danych/i)).closest(".empty-state") as HTMLElement;
+    expect(empty).toBeInTheDocument();
+    // EmptyState has its own refresh button (the top bar has another one, see App.test.tsx)
+    expect(within(empty).getByRole("button", { name: "Odśwież dane" })).toBeEnabled();
   });
 
   it("after refresh done, history and simulation are refetched and charts shown", async () => {

@@ -29,6 +29,7 @@ test.describe("empty store", () => {
 
   test("shows EmptyState with refresh button; refresh against unmapped sources fails clearly", async ({ page }) => {
     await page.goto("/");
+    await expect(page.getByText("DANE SYNTETYCZNE – nie są to dane GUS/MF")).toHaveCount(0);
     const empty = page.locator(".empty-state");
     await expect(empty).toContainText("Brak danych źródłowych");
     await empty.getByRole("button", { name: "Odśwież dane" }).click();
@@ -39,6 +40,16 @@ test.describe("empty store", () => {
 
 test.describe("seeded store (synthetic data)", () => {
   test.use({ colorScheme: "light" });
+
+  test("synthetic data is labelled with a persistent banner", async ({ page }) => {
+    await page.goto("/");
+    const banner = page.getByRole("status").filter({ hasText: "DANE SYNTETYCZNE – nie są to dane GUS/MF" });
+    await expect(banner).toBeVisible();
+    await expect(banner.getByRole("button")).toHaveCount(0);
+    // still there once the charts have loaded
+    await expect(page.getByTestId("metric-row")).toContainText("mld zł");
+    await expect(banner).toBeVisible();
+  });
 
   test("changing VAT standard rate to 25% updates chart and change-vs-baseline metric", async ({ page }) => {
     await openVat(page);
