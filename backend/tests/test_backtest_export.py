@@ -165,3 +165,41 @@ def test_export_unknown_format_422(client):
 def test_export_malformed_body_422(client, body):
     c, _ = client
     assert c.post("/export?format=csv", json=body).status_code == 422
+
+
+def test_backtest_reports_skipped_origins():
+    res = backtest(synthetic_history(22), horizon=2, min_train=12)  # origins with 12-14 obs cannot be fitted
+    assert res.n_skipped == 3 and res.n_origins > 0
+    assert any("Pominięto 3" in n for n in res.notes)
+    assert backtest(synthetic_history(22), horizon=2, min_train=15).n_skipped == 0
+
+
+@pytest.mark.parametrize("fmt", ["csv", "xlsx"])
+@pytest.mark.parametrize("value", [[1, 2], {"a": 1}, "0.2", True, float("nan"), float("inf"), None])
+def test_export_bad_param_values_422(client, fmt, value):
+    c, store = client
+    hist, model = fill(store)
+    import json
+
+    raw = json.dumps({"params": {"vat_rate_standard": value}, "result": sim_result(hist, model)})  # nan/inf -> NaN/Infinity tokens
+    r = c.post(f"/export?format={fmt}", content=raw, headers={"content-type": "application/json"})
+    assert r.status_code == 422, (value, r.status_code)
+
+
+def test_export_oversized_payload_rejected(client):
+    c, store = client
+    hist, model = fill(store)
+    result = sim_result(hist, model)
+    big = {**result, "years": list(range(2000, 2200))}
+    r = c.post("/export?format=csv", json={"params": {}, "result": big})
+    assert r.status_code == 422 and "zbyt duży" in r.json()["detail"]
+    r = c.post("/export?format=csv", json={"params": {}, "result": result, "name": "x" * 1_100_000})
+    assert r.status_code == 413 and "zbyt duże" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("prefix", ["=", "+", "-", "@", "\t", "\r"])
+def test_export_csv_guards_all_formula_prefixes(client, prefix):
+    c, store = client
+    hist, model = fill(store)
+    r = c.post("/export?format=csv", json={"params": {}, "result": sim_result(hist, model), "name": prefix + "cmd"})
+    assert ("'" + prefix + "cmd") in r.content.decode("utf-8-sig")

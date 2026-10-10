@@ -5,7 +5,7 @@ import io
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from openpyxl import Workbook
 from pydantic import BaseModel
 
@@ -16,6 +16,11 @@ HEADER = ["year", "tax", *BANDS, "baseline"]
 PARAM_HEADER = ["parametr", "wartość"]
 XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _FORMULA_PREFIX = ("=", "+", "-", "@", "\t", "\r")
+
+
+MAX_BODY_BYTES = 1_000_000
+MAX_YEARS = 50
+MAX_TAXES = 20
 
 
 class ExportRequest(BaseModel):
@@ -32,6 +37,9 @@ def safe(value: Any) -> Any:
 
 
 def result_rows(result: dict) -> list[list]:
+    years_raw, taxes_raw = result.get("years"), result.get("taxes")
+    if (isinstance(years_raw, list) and len(years_raw) > MAX_YEARS) or (isinstance(taxes_raw, dict) and len(taxes_raw) > MAX_TAXES):
+        raise HTTPException(status_code=422, detail=f"Wynik zbyt duży do eksportu (maks. {MAX_YEARS} lat i {MAX_TAXES} podatków).")
     try:
         years = [int(y) for y in result["years"]]
         taxes, baseline = result["taxes"], result["baseline"]
@@ -92,7 +100,10 @@ router = APIRouter(prefix="/export", tags=["export"])
 
 
 @router.post("")
-def post_export(req: ExportRequest, format: Literal["csv", "xlsx"] = Query(...)) -> Response:
+def post_export(request: Request, req: ExportRequest, format: Literal["csv", "xlsx"] = Query(...)) -> Response:
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="Żądanie zbyt duże (maks. 1 MB).")
     rows = result_rows(req.result)
     params = param_rows(req)
     stamp = datetime.now(UTC).strftime("%Y%m%d")

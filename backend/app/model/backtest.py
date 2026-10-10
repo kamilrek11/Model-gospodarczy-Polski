@@ -34,6 +34,7 @@ class BacktestResult:
     notes: list[str] = field(default_factory=lambda: [NOTE_CURRENT_LAW, NOTE_METRICS])
     message: str | None = None
     n_origins: int = 0
+    n_skipped: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -43,7 +44,15 @@ class BacktestResult:
             "notes": self.notes,
             "message": self.message,
             "n_origins": self.n_origins,
+            "n_skipped": self.n_skipped,
         }
+
+
+def _notes(n_skipped: int) -> list[str]:
+    notes = [NOTE_CURRENT_LAW, NOTE_METRICS]
+    if n_skipped:
+        notes.append(f"Pominięto {n_skipped} lat startowych (brak dopasowania modelu) - wyniki opierają się na pozostałych latach.")
+    return notes
 
 
 def backtest(data: dict[str, pd.DataFrame], horizon: int = 3, min_train: int = 12) -> BacktestResult:
@@ -57,6 +66,7 @@ def backtest(data: dict[str, pd.DataFrame], horizon: int = 3, min_train: int = 1
     hit80: dict[str, list[float]] = {}
     hit95: dict[str, list[float]] = {}
     n_origins = 0
+    n_skipped = 0
     for pos, origin in enumerate(years[:-1]):
         if pos + 1 < min_train:
             continue
@@ -65,6 +75,7 @@ def backtest(data: dict[str, pd.DataFrame], horizon: int = 3, min_train: int = 1
             model = fit_macro(macro[macro.index <= origin], lags=1)
             res = simulate(model, train, params, horizon, BACKTEST_PATHS, BACKTEST_SEED)
         except (InsufficientData, ValueError, np.linalg.LinAlgError):
+            n_skipped += 1
             continue
         used = False
         for tax, bands in res.taxes.items():  # only enabled taxes
@@ -82,10 +93,12 @@ def backtest(data: dict[str, pd.DataFrame], horizon: int = 3, min_train: int = 1
                 hit95.setdefault(tax, []).append(float(bands["p2_5"][i] <= actual <= bands["p97_5"][i]))
         n_origins += used
     if not n_origins:
-        return BacktestResult(message=MSG_NO_ORIGIN)
+        return BacktestResult(message=MSG_NO_ORIGIN, n_skipped=n_skipped, notes=_notes(n_skipped))
     return BacktestResult(
         mape={t: float(np.mean(v)) for t, v in errors.items()},
         coverage80={t: float(np.mean(v)) for t, v in hit80.items()},
         coverage95={t: float(np.mean(v)) for t, v in hit95.items()},
         n_origins=n_origins,
+        n_skipped=n_skipped,
+        notes=_notes(n_skipped),
     )
