@@ -1,11 +1,9 @@
 """Series-name -> source identifiers.
 
 BDL ids are verified against the live API (docs/data-sources-discovery.md, 2026-10-10).
-The execution (MF) endpoints are still unverified placeholders: sentinels starting with
-TODO_VERIFY make that client raise SourceError("series not mapped").
+The MF budget-execution rows are verified against the published reports 2016-2025
+(dane.gov.pl dataset 163, docs/data-sources-discovery.md section "MF – macierz lat").
 """
-
-UNVERIFIED_PREFIX = "TODO_VERIFY"
 
 # BDL variable ids. The national unit is requested with `unit-level=0` and must be
 # id "000000000000" (name "POLSKA").
@@ -19,13 +17,12 @@ BDL_SERIES: dict[str, str] = {
 }
 BDL_NATIONAL_UNIT_ID = "000000000000"
 
-# PLACEHOLDER-UNVERIFIED: confirm against live API (values in mld zl)
-EXECUTION_ENDPOINTS: dict[str, str] = {
-    "rev_pit": "TODO_VERIFY_URL_PIT",  # PLACEHOLDER-UNVERIFIED: confirm against live API
-    "rev_cit": "TODO_VERIFY_URL_CIT",  # PLACEHOLDER-UNVERIFIED: confirm against live API
-    "rev_vat": "TODO_VERIFY_URL_VAT",  # PLACEHOLDER-UNVERIFIED: confirm against live API
+# MF "Część tabelaryczna sprawozdania z wykonania budżetu państwa", dane.gov.pl dataset 163:
+# per-year ZIP -> "TOM I" ZIP -> "007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx", column "Wykonanie",
+# values in tys. zł (state budget, cash). Rows are matched by their full label.
+MF_DATASET_ID = 163
+MF_EXECUTION_ROWS: dict[str, str] = {
+    "rev_vat": "1.1. Podatek od towarów i usług",
+    "rev_cit": "1.4. Podatek dochodowy od osób prawnych",
+    "rev_pit": "1.5. Podatek dochodowy od osób fizycznych",
 }
-
-
-def is_unmapped(value: str | None) -> bool:
-    return not value or str(value).startswith(UNVERIFIED_PREFIX)

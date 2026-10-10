@@ -23,3 +23,16 @@ so they are stored complete (the only change is the file name); nothing was edit
 - `eurostat_nama_10_gdp_multi_series.json`: `nama_10_gdp?geo=PL&na_item=B1GQ,B2A3G,P31_S14,D1&unit=CP_MNAC,CLV20_MNAC&sinceTimePeriod=2000`
   (6 non-empty series; D1/B2A3G/P31_S14 have no CLV20_MNAC values), used to check the multi-series decoding and the "single series expected" error.
 Test variants with missing values are derived in the tests by deleting keys from these recordings.
+
+# MF budget execution workbooks (reconstructed)
+
+`mf_007_{2016,2018,2023,2024,2025}.xlsx` are small workbooks **reconstructed** with openpyxl by
+`backend/tests/mf_fixtures.py` (`python -m tests.mf_fixtures` from `backend/`). They are neither copies
+of the MF files nor synthetic inventions: the layout (sheet name, title/header/unit rows, the label,
+plan and "Wykonanie" columns, the column-A short labels, row order, and the duplicate "1.4. Podatek
+tonażowy" row of 2016) replicates the real "007- DOCHODY BP ZESTAWIENIE OGÓŁEM" workbooks of the
+MF report "Część tabelaryczna sprawozdania z wykonania budżetu państwa" (dane.gov.pl dataset 163,
+inspected 2026-10-10), and the numbers are the published report values in tys. zł (2 decimals; only
+the first rows down to 1.6 are included). The three column layouts are: 2016/2023/2025 (A+C / plan D /
+Wykonanie E), 2018 (A / B / C, same as 2017) and 2024 (B / C / D). The real ZIPs/XLSX are not committed;
+the ZIP nesting is rebuilt in memory by the tests. See docs/data-sources-discovery.md, "MF – macierz lat".

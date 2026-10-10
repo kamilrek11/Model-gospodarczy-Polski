@@ -18,7 +18,7 @@ Eurostat base = `https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/
 | cpi | BDL var **217230** "Wskaźnik cen towarów i usług konsumpcyjnych – ogółem" (P2955, COICOP 1999, "dane do 2025r.") | `/data/by-variable/217230?...unit-level=0` | index, prev year=100 (unit "-") | 2003–2025 | 2023: 111.4, 2024: 103.6, 2025: 103.6 | **Not a price level** — growth index. Chain: P_base=100; P_t = P_{t-1}·val_t/100. From 2026 only quarterly COICOP-2018 vars (subject P4635, e.g. 1753083 "1 kwartał / ogółem – okres poprzedni = 100") → series breaks. 2000–2002 missing. Alternative level: Eurostat `prc_hicp_aind?geo=PL&coicop=CP00` unit INX_A_AVG (HICP 2015=100, 2000–2025: 143.5 / 148.7 / 153.7) — HICP≠CPI. |
 | consumption_nominal | **NOT in BDL** (variables/search "spożycie" → 0 hits; no national-accounts expenditure subject). Use Eurostat **nama_10_gdp P31_S14** | `nama_10_gdp?format=JSON&lang=EN&geo=PL&na_item=P31_S14&unit=CP_MNAC&sinceTimePeriod=2000` | mln zł, current prices | 2000–2025 | 2023: 1934063, 2024: 2056557, 2025: 2209033 | Unit code is `CP_MNAC` (not CP_MIO_NAC — that returns empty `size` 0). /1000 → mld zł. Requires a new Eurostat client. |
 | gross_surplus | BDL var **458419** "nadwyżka operacyjna brutto" (K29 Rachunki regionalne, G549/P3520) | `/data/by-variable/458419?...unit-level=0` | mln zł, current prices | 2000–2023 | 2021: 1279108, 2022: 1553042, 2023: 1676697 | Equals Eurostat B2A3G (GOS + mixed income): 2022 identical (1553042). Lags ~2 years (no 2024). Eurostat `nama_10_gdp na_item=B2A3G unit=CP_MNAC` has 2000–2025 (2023: 1684850 revised, 2024: 1689480, 2025: 1765710). |
-| rev_vat | MF "Część tabelaryczna sprawozdania z wykonania budżetu państwa", dane.gov.pl dataset **163** (CC0) | per-year ZIP (see §B) → inner "TOM I" ZIP → file `007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx`, row label "1.1. Podatek od towarów i usług", column "Wykonanie" | tys. zł (cash, state budget) | 2015–2025 (2015–2019 to verify, 2017/2016 ZIP names differ) | 2023: 244.27, 2024: 287.68, 2025: 321.65 mld zł | /1e6 → mld zł. Layout differs across years (2024: label col A, values later; 2023/2025: label A and C, plan D, execution E) → match by label, take execution column. Pre-2015: MF website only. |
+| rev_vat | MF "Część tabelaryczna sprawozdania z wykonania budżetu państwa", dane.gov.pl dataset **163** (CC0) | per-year ZIP (see §B) → inner "TOM I" ZIP → file `007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx`, row label "1.1. Podatek od towarów i usług", column "Wykonanie" | tys. zł (cash, state budget) | 2016–2025 parsed (2015 legacy .xls: unsupported) – see "MF – macierz lat" | 2023: 244.27, 2024: 287.68, 2025: 321.65 mld zł | /1e6 → mld zł. Layout differs across years (2024: label col A, values later; 2023/2025: label A and C, plan D, execution E) → match by label, take execution column. Pre-2015: MF website only. |
 | rev_cit | same file, row "1.4. Podatek dochodowy od osób prawnych" | as above | tys. zł | 2015–2025 | 2023: 67.88, 2024: 60.24, 2025: 63.69 mld zł | state-budget share only (JST shares excluded). |
 | rev_pit | same file, row "1.5. Podatek dochodowy od osób fizycznych" | as above | tys. zł | 2015–2025 | 2023: 91.67, 2024: 97.60, 2025: **28.75** mld zł | **Structural break 2025**: new JST revenue law moved most PIT to local governments (S1313 D51A also jumps in 2024 Eurostat). State-budget PIT is NOT comparable across 2024/2025 without adjustment. |
 
@@ -64,6 +64,51 @@ Comparison with MF cash state budget: VAT 2024 287.7 (MF) vs 290.7 (ESA) — clo
   - Parse recipe: outer zip → inner "…TOM I….zip" → file matching `007*DOCHODY BP ZESTAWIENIE OG*.xlsx` (sheet "{YYYY} Załacznik nr 1"; header "w tysiącach zł"; first rows: "DOCHODY OGÓŁEM", "1.1. Podatek od towarów i usług", "1.4. Podatek dochodowy od osób prawnych", "1.5. Podatek dochodowy od osób fizycznych"); take the "Wykonanie" (last numeric) cell in the row; /1e6 → mld zł. Also `005 - ZESTAWIENIE OGÓLNE…xlsx` gives totals (2024 dochody 623239830.6 tys. zł). Zip filenames inside use `#Uxxxx` escapes for Polish chars.
 - MF website (mf.gov.pl) itself was not probed further (time/budget); dataset 163 is MF's own publication on the official portal.
 - B4 NBP: nothing relevant. Not probed.
+
+## MF – macierz lat
+
+Verified 2026-10-10 against the real resources of dataset 163 (resource list from
+`https://api.dane.gov.pl/1.4/datasets/163/resources`, `attributes.link`; year from the title
+"… w {YYYY} r."; `data_date` is the publication date). Downloads were sequential, archives read in
+memory; 2015/2016/2018 were inspected via HTTP Range requests (only the "TOM I" XLS archive).
+Values: column "Wykonanie" (found from the header text in every year — the "last numeric cell"
+fallback was **not needed** for any year), unit line " w tysiącach zł" in every sheet, published
+with 2 decimals (cells hold formula float noise, e.g. 287683368.91015995 → 287683368.91).
+Parsed by `backend/app/data/mf_execution.py` (`find_member` + `extract_revenue`) from the real files.
+
+| year | resource id | ZIP (MB) | path to the 007 member (outer → nested → member) | format | sheet | rows VAT/CIT/PIT | label col / Wykonanie col | unit | VAT | CIT | PIT (mld zł) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2015 | 19451 | 38.4 | `…2015_r.zip.zip` → `1_Tabelaryczne sprawozdanie za 2015 r - Tom I i II.zip` (38.4 MB, stored) → `SPRAWOZDANIE … 2015 ROK - TOM I_XLS.ZIP` → `007- DOCHODY BP ZESTAWIENIE OGÓŁEM (STR. 1.1).XLS` | **legacy .xls (BIFF)** | – | – | – | – | **unsupported** | | |
+| 2016 | 19452 | 46.3 | `2016 … TOM I-WERSJA XLS.ZIP` → `007-DOCHODY BP ZESTAWIENIE OGÓŁEM (STR.1.1).XLSX` | xlsx | `Zał 1` | 15/18/19 | A+C / E | w tysiącach zł | 126.58 | 26.38 | 48.23 |
+| 2017 | 337 | 6.7 | `2017 … TOM I-WERSJA XLS.ZIP` → `007-DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx` | xlsx | `ZAŁ 1` | 14/17/18 | A / C | w tysiącach zł | 156.80 | 29.76 | 52.67 |
+| 2018 | 17629 | 43.5 | `1a Sprawozdanie za 2018 rok Tom I XLS.zip` → `007-DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx` | xlsx | `ZAŁ 1` | 14/17/18 | A / C | w tysiącach zł | 174.95 | 34.64 | 59.56 |
+| 2019 | 24153 | 14.8 | `1a Sprawozdanie tabelaryczne za 2019 rok Tom I XLS.zip` → `007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx` | xlsx | `Załącznik 1` | 15/18/19 | A+C / E | w tysiącach zł | 180.89 | 39.98 | 65.44 |
+| 2020 | 30562 | 11.0 | `1.1 Sprawozdanie 2020 TOM I xls.zip` → `007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx` | xlsx | ` ZaŁącznik 1` | 15/18/19 | A+C / E | w tysiącach zł | 184.55 | 41.29 | 63.80 |
+| 2021 | 38967 | 21.8 | `1.1. Sprawozdanie 2021 TOM I xls.zip` → `1.1. Sprawozdanie 2021 TOM I xls/007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx` | xlsx | `2021 Załącznik nr 1` | 14/17/18 | A+C / E | w tysiącach zł | 215.73 | 52.37 | 73.61 |
+| 2022 | 48622 | 17.4 | `1.1 Sprawozdanie … 2022 rok Tom I XLS.zip` → `007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx` | xlsx | `2022 Załącznik nr 1` | 14/17/18 | A+C / E | w tysiącach zł | 230.39 | 70.14 | 68.11 |
+| 2023 | 58249 | 19.4 | `Sprawozdanie … 2023r. TOM I XLS.zip` → `XLS/007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx` | xlsx | `2023 Załacznik nr 1` | 14/17/18 | A+C / E | w tysiącach zł | 244.27 | 67.88 | 91.67 |
+| 2024 | 72399 | 6.4 | `SPRAWOZDANIE Z WYKONANIA ZA 2024 TOM I XLS.zip` → `007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx` | xlsx | `2024 Załacznik nr 1` | 14/17/18 | B / D | w tysiącach zł | 287.68 | 60.24 | 97.60 |
+| 2025 | 2054935 | 24.2 | `SPRAWOZDANIE … ZA 2025 TOM I.zip` → `007- DOCHODY BP ZESTAWIENIE OGÓŁEM.xlsx` | xlsx | `2025 Załacznik nr 1` | 14/17/18 | A+C / E | w tysiącach zł | 321.65 | 63.69 | 28.75 |
+
+Exact values (tys. zł, "Wykonanie"): 2016 126584120 / 26381397 / 48232395; 2017 156801210.83 / 29758466.85 / 52668800.67;
+2018 174947070.50 / 34640852.72 / 59558738.49; 2019 180891751.05 / 39984712.83 / 65444928.26; 2020 184551929.03 / 41293050.55 / 63797444.20;
+2021 215733974.71 / 52373757.92 / 73606199.30; 2022 230390543.92 / 70136602.91 / 68107159.06; 2023 244267385.71 / 67883082.34 / 91665807.67;
+2024 287683368.91 / 60239719.55 / 97599844.06; 2025 321646381.78 / 63686737.92 / 28752115.01.
+
+Layouts: three distinct column layouts — (a) short label in A, numbered label in C, plan D, Wykonanie E
+(2016, 2019–2023, 2025); (b) label A, plan B, Wykonanie C (2017, 2018); (c) label B, plan C, Wykonanie D (2024).
+Header row "Wyszczególnienie | Budżet według ustawy budżetowej | Wykonanie", unit line one row below,
+column numbers "1 2 3" two rows below, title "DOCHODY BUDŻETU PAŃSTWA W {YYYY} R." above. One sheet per workbook.
+Sanity: VAT 126.6 → 321.6 mld zł, monotone increasing over 2016–2025; CIT/PIT plausible; PIT 2025 shows the known
+JST-reform break.
+
+Pitfalls found:
+- The 2016 sheet has a second row numbered "1.4." ("1.4. Podatek tonażowy", no execution value) → rows are matched by the full label, never by the "1.x." prefix.
+- Archive names without the UTF-8 flag are CP852 (Python shows them as CP437 mojibake, e.g. `OGα¥EM`); `unzip` shows `#Uxxxx` escapes. Matching uses only ASCII parts (`007`, `DOCHODY BP ZESTAWIENIE OG`).
+- 2015/2016/2018/2019 bundle large PDF archives next to the XLS ones (2016: 38.8 MB `TOM I_PDF.ZIP`); PDF archives are skipped, "TOM I" archives are tried first.
+- Size: 2016 (46.3 MB) and 2018 (43.5 MB) exceed 40 MB → the client's default `max_download_bytes` is 60 MB.
+- 2017's `attributes.link` is `https://www.dane.gov.pl/…`, which answers 301 → `https://dane.gov.pl/…` (both allowed hosts).
+- 2015: the 007 workbook is legacy `.xls` and sits one archive deeper (outer → `Tom I i II.zip` wrapper of 38.4 MB → `TOM I_XLS.ZIP`). Only one year is `.xls` (2016+ are `.xlsx`), so `xlrd` was **not** added (rule: only if it unlocks ≥ 4 years); resource 19451 is listed as known-unsupported and is not downloaded (a re-published resource gets a new id and is tried again).
 
 ## C. PIT income distribution
 dane.gov.pl dataset **191** "Informacje dotyczące rozliczenia podatku dochodowego od osób fizycznych" — 14 resources, **PDF only**, years 2008–2021 (e.g. 2021: https://api.dane.gov.pl/media/resources/20230102/INFORMACJA_PIT_za_2021.pdf). Contains the taxpayers-by-bracket tables, but not machine-readable (PDF table extraction needed). Sister dataset 162 (CIT) notes "Począwszy od 2022 r. informacje publikowane są wyłącznie na stronie podatki.gov.pl" — likely same for PIT (podatki.gov.pl page fetched but returned a 955-byte shell; formats there unverified).
