@@ -14,8 +14,9 @@ docker compose up -d --build     # frontend: http://localhost:8080 (jedyny opubl
 Backend nie jest wystawiony na zewnątrz; nginx we frontendzie proxuje `/api/*` do `backend:8000` (bez prefiksu `/api`).
 Baza SQLite leży w nazwanym wolumenie `budget-data` (`/data/budget.db`). Healthcheck backendu: `GET /health`.
 
-> Stan weryfikacji: pliki Dockerfile/compose przeszły `docker compose config`, ale w środowisku, w którym powstały,
-> nie działał demon Dockera - obrazów nie zbudowano, a `docker compose up` NIE był uruchamiany.
+> Stan weryfikacji: w środowisku, w którym powstał kod, nie działał demon Dockera, więc lokalnie sprawdzono tylko
+> `docker compose config`. Build obrazów, `docker compose up --wait`, `nginx -t` i test dymny (SPA oraz proxy `/api`)
+> uruchamia i przechodzi workflow CI (zadanie „Docker" w `.github/workflows/ci.yml`) na runnerze GitHub Actions.
 
 ### Lokalnie (dev)
 
