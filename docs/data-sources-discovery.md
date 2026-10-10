@@ -203,8 +203,10 @@ Załamanie PIT 2025:
 
 Uwagi do raportu:
 - „Pominięto 3 lat startowych” w backteście: lata startowe 2016–2018 mają 12–14 wspólnych lat makro (od 2005), a VAR
-  wymaga co najmniej 15 obserwacji (`MIN_OBS`); `min_train=12` backtestu jest niższe niż ten próg. Ocenione lata startowe:
-  2019–2023 (cele 2020–2025; PIT tylko do 2024).
+  wymaga co najmniej 15 obserwacji (`MIN_OBS`); `min_train=12` backtestu było niższe niż ten próg. Ocenione lata startowe:
+  2019–2023 (cele 2020–2025; PIT tylko do 2024). Poprawione po tym przebiegu: `min_train` wynosi teraz co najmniej
+  `MIN_OBS`, więc te lata nie są już liczone jako pominięte („pominięte: 0”, bez tej uwagi); MAPE i pokrycie się nie
+  zmieniają, bo pominięte lata i tak nie wchodziły do wyników.
 - Kalibracja VAT i CIT obejmuje rok 2025 (konsumpcja i nadwyżka operacyjna z Eurostatu oraz wykonanie MF są już za 2025),
   choć ostatni rok modelu makro to 2024 (BDL: PKB realny i zatrudnienie kończą się na 2024). Porównanie prognozy 2025 VAT/CIT
   z wykonaniem 2025 nie jest więc testem poza próbą.

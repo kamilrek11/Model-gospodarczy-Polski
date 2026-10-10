@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 from app.model import config
-from app.model.macro import MACRO_VARS, InsufficientData, fit_macro
+from app.model.macro import MACRO_VARS, MIN_OBS, InsufficientData, fit_macro
 from app.model.params import defaults
 from app.model.simulate import BREAK_NOTES, simulate
 
@@ -65,7 +65,10 @@ def _notes(n_skipped: int, broken: set[str] = frozenset()) -> list[str]:
     return notes
 
 
-def backtest(data: dict[str, pd.DataFrame], horizon: int = 3, min_train: int = 12) -> BacktestResult:
+def backtest(data: dict[str, pd.DataFrame], horizon: int = 3, min_train: int = MIN_OBS) -> BacktestResult:
+    # an origin needs at least MIN_OBS macro years to be fitted at all; below that it would only be
+    # counted as "skipped", so n_skipped is reserved for real fit failures
+    min_train = max(min_train, MIN_OBS)
     if not all(v in data and not data[v].empty for v in MACRO_VARS):
         return BacktestResult(message=MSG_NO_ORIGIN)
     macro = pd.concat({v: data[v]["value"].astype(float) for v in MACRO_VARS}, axis=1).dropna().sort_index()
