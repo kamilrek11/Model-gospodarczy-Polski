@@ -142,7 +142,7 @@ def test_export_csv_escapes_formula_injection(client):
     assert "'=HYPERLINK" in text and "\n=HYPERLINK" not in text and ",=HYPERLINK" not in text
 
 
-def test_export_xlsx_has_two_sheets(client):
+def test_export_xlsx_has_data_sheets(client):
     c, store = client
     hist, model = fill(store)
     r = c.post("/export?format=xlsx", json={"params": {}, "result": sim_result(hist, model)})
@@ -150,7 +150,7 @@ def test_export_xlsx_has_two_sheets(client):
     assert "spreadsheetml" in r.headers["content-type"]
     assert ".xlsx" in r.headers["content-disposition"]
     wb = load_workbook(io.BytesIO(r.content))
-    assert wb.sheetnames == ["Wyniki", "Parametry"]
+    assert wb.sheetnames == ["Wyniki", "Parametry", "Metadane"]
     assert wb["Wyniki"].max_row > 3 and wb["Parametry"].max_row > 3
     wb.close()
 
