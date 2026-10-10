@@ -119,7 +119,9 @@ cd backend
 .venv/bin/python -m pytest -m live -q
 ```
 
-Skrypt odmawia pracy, gdy `--db` wskazuje istniejący plik albo bazę aplikacji (domyślną lub `$BUDGET_DB_PATH`).
+Skrypt odmawia pracy, gdy `--db` wskazuje istniejący plik albo bazę aplikacji (domyślną lub `$BUDGET_DB_PATH`), oraz gdy
+cache MF byłby katalogiem cache aplikacji. Domyślny cache to `<katalog bazy>/<nazwa bazy>-cache` (np. `/tmp/live-cache`).
+Po nieudanym odświeżeniu (kod 1) skrypt usuwa utworzony przez siebie plik bazy, więc można go od razu uruchomić ponownie.
 Zwykłe `pytest -q` pomija testy `live` (`addopts = -m "not live"` w `pyproject.toml`); w CI uruchamia je osobne zadanie
 `live-sources`, dostępne wyłącznie ręcznie (`workflow_dispatch`). Wynik pierwszego uruchomienia na żywo (2026-10-10) z
 liczbami: `docs/data-sources-discovery.md`, sekcja „Uruchomienie na żywo 2026-10-10”.

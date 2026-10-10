@@ -5,10 +5,12 @@ simulation and the backtest, printed as a plain-text report.
 
 Network: BDL 6 requests (anonymous limit 1000 / 12 h; set BDL_CLIENT_ID for a higher one), Eurostat 2
 requests, dane.gov.pl the resource list plus one ZIP per year not yet in the MF cache (the first run downloads
-about 210 MB; the cache keeps parsed values only, default <db dir>/cache).
+about 210 MB; the cache keeps parsed values only, default <db dir>/<db stem>-cache).
 
 Guards: --db is required, must not exist yet (an existing file is never touched) and must not be the
-application's database (the default path or $BUDGET_DB_PATH, compared after realpath).
+application's database (the default path or $BUDGET_DB_PATH, compared after realpath); the MF cache must
+not be the application's cache directory (refresh.cache_dir() or <default db dir>/cache). When the refresh
+fails, the database file this script created is removed again (a re-run is not refused).
 
 Exit code: 0 when the refresh succeeded (all sources fetched, quality gates passed, snapshot written),
 1 when it failed (the report then lists the errors and violations), 2 when the guards refused to run.
@@ -25,6 +27,7 @@ import numpy as np
 import pandas as pd
 
 from app.api.refresh import DEFAULT_DB_PATH, get_clients, refresh
+from app.api.refresh import cache_dir as app_cache_dir
 from app.api.simulate import load_history
 from app.data.dataset import EUROSTAT_SURPLUS
 from app.data.mf_execution import CACHE_ENV
@@ -66,7 +69,15 @@ def check_target(db: str | None, env: dict[str, str] | None = None) -> Path:
 
 
 def resolve_cache_dir(db: Path, cache_dir: str | None) -> str:
-    return cache_dir if cache_dir else str(db.parent / "cache")
+    """--cache-dir, else <db dir>/<db stem>-cache; never the application's own MF cache."""
+    chosen = cache_dir if cache_dir else str(db.parent / f"{db.stem}-cache")
+    protected = {os.path.realpath(DEFAULT_DB_PATH.parent / "cache")}
+    app_cache = app_cache_dir()
+    if app_cache:
+        protected.add(os.path.realpath(app_cache))
+    if os.path.realpath(chosen) in protected:
+        raise ReportRefused(f"refusing to run: {os.path.realpath(chosen)} is the application's MF cache directory")
+    return chosen
 
 
 def default_clients(cache_dir: str):
@@ -299,6 +310,15 @@ def stored_series(store: Store) -> dict[str, tuple[str, pd.DataFrame]]:
     return {name: (src, store.load_series(name)) for name, src in sources.items()}
 
 
+def _remove_db(db: Path) -> None:
+    """Remove the database this run created (check_target guaranteed it did not exist before)."""
+    for path in (db, db.with_name(db.name + "-journal")):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def run(db: Path, cache_dir: str, make_clients) -> tuple[int, str]:
     meta = {
         "date": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
@@ -321,6 +341,7 @@ def run(db: Path, cache_dir: str, make_clients) -> tuple[int, str]:
     for r in recorders:
         fetched.update(r.result)
     if not result.ok:
+        _remove_db(db)
         return 1, format_report(meta, result, fetched)
 
     model = MacroModel.from_dict(store.load_model())
@@ -334,14 +355,19 @@ def run(db: Path, cache_dir: str, make_clients) -> tuple[int, str]:
 def main(argv: list[str] | None = None, make_clients=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--db", help="path of a NEW SQLite file for the refreshed data (must not exist)")
-    ap.add_argument("--cache-dir", help="MF cache directory (default: <db dir>/cache)")
+    ap.add_argument("--cache-dir", help="MF cache directory (default: <db dir>/<db stem>-cache)")
     args = ap.parse_args(argv)
     try:
         db = check_target(args.db)
+        cache = resolve_cache_dir(db, args.cache_dir)
     except ReportRefused as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    code, report = run(db, resolve_cache_dir(db, args.cache_dir), make_clients or default_clients)
+    try:
+        code, report = run(db, cache, make_clients or default_clients)
+    except BaseException:
+        _remove_db(db)
+        raise
     print(report, end="")
     return code
 

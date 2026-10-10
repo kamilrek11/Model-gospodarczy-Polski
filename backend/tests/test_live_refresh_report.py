@@ -61,9 +61,34 @@ def test_main_refusal_exits_2_and_creates_nothing(tmp_path, capsys):
     assert "refusing" in capsys.readouterr().err
 
 
-def test_default_cache_dir_is_next_to_db(tmp_path):
-    assert lr.resolve_cache_dir(tmp_path / "r.db", None) == str(tmp_path / "cache")
+def test_default_cache_dir_is_named_after_the_db_next_to_it(tmp_path):
+    assert lr.resolve_cache_dir(tmp_path / "r.db", None) == str(tmp_path / "r-cache")
     assert lr.resolve_cache_dir(tmp_path / "r.db", str(tmp_path / "c")) == str(tmp_path / "c")
+    # a db in the app's own directory does not default to the app's cache (<db dir>/cache)
+    assert lr.resolve_cache_dir(DEFAULT_DB_PATH.parent / "live.db", None) == str(DEFAULT_DB_PATH.parent / "live-cache")
+
+
+def test_refuses_the_apps_own_cache_dir(tmp_path, monkeypatch):
+    monkeypatch.delenv("BUDGET_CACHE_DIR", raising=False)
+    monkeypatch.delenv("BUDGET_DB_PATH", raising=False)
+    with pytest.raises(lr.ReportRefused, match="cache"):
+        lr.resolve_cache_dir(tmp_path / "r.db", str(DEFAULT_DB_PATH.parent / "." / "cache"))
+    monkeypatch.setenv("BUDGET_CACHE_DIR", str(tmp_path / "appcache"))
+    with pytest.raises(lr.ReportRefused, match="cache"):
+        lr.resolve_cache_dir(tmp_path / "r.db", str(tmp_path / "appcache"))
+    monkeypatch.delenv("BUDGET_CACHE_DIR")
+    monkeypatch.setenv("BUDGET_DB_PATH", str(tmp_path / "app" / "budget.db"))
+    with pytest.raises(lr.ReportRefused, match="cache"):
+        lr.resolve_cache_dir(tmp_path / "r.db", str(tmp_path / "app" / "cache"))
+
+
+def test_main_refuses_app_cache_with_exit_2_and_creates_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("BUDGET_CACHE_DIR", str(tmp_path / "appcache"))
+    called = []
+    db = tmp_path / "n.db"
+    code = lr.main(["--db", str(db), "--cache-dir", str(tmp_path / "appcache")], make_clients=lambda c: called.append(c) or [])
+    assert code == 2 and called == [] and not db.exists()
+    assert "cache" in capsys.readouterr().err
 
 
 def test_default_clients_use_the_api_wiring_with_the_given_cache(tmp_path, monkeypatch):
@@ -188,3 +213,4 @@ def test_failed_refresh_exits_1_and_reports_errors(tmp_path, capsys):
     assert code == 1
     assert "NIE PRZESZŁO" in out and "gus_bdl: HTTP 429 after 4 attempts" in out
     assert "Prognoza" not in out
+    assert not (tmp_path / "f.db").exists()  # the db the script created is removed, so a re-run is not refused
