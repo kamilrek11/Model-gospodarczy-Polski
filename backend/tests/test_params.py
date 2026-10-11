@@ -16,6 +16,7 @@ EXPECTED = {
     "vat_rate_reduced2": 0.05,
     "cit_rate": 0.19,
     "cit_rate_small": 0.09,
+    "pit_state_share_mult": 1.0,
 }
 
 
@@ -66,3 +67,16 @@ def test_frontend_parameters_fixture_matches_backend_schema():
 
     path = Path(__file__).resolve().parents[2] / "frontend" / "src" / "testdata" / "parameters.json"
     assert json.loads(path.read_text(encoding="utf-8")) == schema_as_dicts(), "regenerate frontend/src/testdata/parameters.json from schema_as_dicts()"
+
+
+def test_old_requests_without_the_multiplier_validate_to_default():
+    assert validate({})["pit_state_share_mult"] == 1.0
+    assert validate({"vat_rate_standard": 0.25, "pit_rate_low": 0.1})["pit_state_share_mult"] == 1.0
+
+
+def test_multiplier_out_of_range_rejected():
+    for bad in (0.4, 2.1):
+        with pytest.raises(ValueError, match="poza zakresem"):
+            validate({"pit_state_share_mult": bad})
+    assert validate({"pit_state_share_mult": 0.5})["pit_state_share_mult"] == 0.5
+    assert validate({"pit_state_share_mult": 2.0})["pit_state_share_mult"] == 2.0

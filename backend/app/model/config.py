@@ -106,6 +106,10 @@ CONSUMPTION_GDP_SHARE: float = 0.57
 # PLACEHOLDER-UNVERIFIED: illustrative value (data check 0.40-0.52, see docs/model-parameters.md).
 EMPLOYMENT_GDP_ELASTICITY: float = 0.5
 
+# Log-sd of the lognormal noise on the state's PIT share from 2025 (median 1); see docs/model-parameters.md.
+# PLACEHOLDER-UNVERIFIED: no source; scatter of a single calibration point (one year, 2025).
+PIT_STATE_SHARE_SIGMA: float = 0.2
+
 # Number of most recent years used for the per-tax calibration factors (mean ratio of
 # recorded revenue to module output at current law). Method choice, not a data value.
 CALIBRATION_YEARS: int = 3

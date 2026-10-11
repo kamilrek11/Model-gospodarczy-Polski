@@ -478,6 +478,18 @@
    "range_text": ""
   },
   {
+   "key": "PIT_STATE_SHARE_SIGMA",
+   "value": 0.2,
+   "status": "assumption",
+   "note": "Odchylenie standardowe logarytmu losowego czynnika ε (lognormalnego, mediana 1) przy udziale budżetu państwa w PIT od 2025 r. Brak źródła: udział s₀ jest oszacowany z jednego roku (2025), więc nie ma serii, z której dałoby się policzyć jego rozrzut; 0,2 to założony rozrzut jednego punktu kalibracyjnego (przedział 0,1–0,3).",
+   "source": "",
+   "year": null,
+   "url": "",
+   "low": 0.1,
+   "high": 0.3,
+   "range_text": ""
+  },
+  {
    "key": "CALIBRATION_YEARS",
    "value": 3,
    "status": "model-structure",

@@ -1,6 +1,6 @@
 # Rejestr parametrów modelu
 
-Stan: 2026-10-11 (Task 2 planu `docs/superpowers/plans/2026-10-11-parametry-modelu.md`). Rejestr opisuje 13 stałych
+Stan: 2026-10-11 (Task 2 planu `docs/superpowers/plans/2026-10-11-parametry-modelu.md`). Rejestr opisuje 14 stałych
 z `backend/app/model/config.py`, które nie są parametrami ustawianymi przez użytkownika. Kopia maszynowa:
 `backend/app/model/param_meta.py` (`PARAMETERS`); zgodność obu pilnuje `backend/tests/test_param_registry_doc.py`.
 `CALIBRATION_YEARS` i `STRUCTURAL_BREAKS` to wybory metody, nie dane – poza rejestrem.
@@ -51,6 +51,7 @@ pośrednio (przez średnią) i przede wszystkim dynamikę prognozy oraz skutki s
 | `HOUSEHOLD_MPC` | 0,6 | krańcowa skłonność (bezwymiarowa) | założenie | brak (patrz Uwagi) | 0,3–0,9 | Nie znaleziono weryfikowalnego oszacowania MPC z dochodu rozporządzalnego dla Polski: dostępne prace dotyczą MPC względem PKB (Ossowski 2019, REME 2(29)) lub z majątku. Zakres od wygładzania konsumpcji do gospodarstw z ograniczeniami płynności. |  |
 | `CONSUMPTION_GDP_SHARE` | 0,57 (zapas); z danych 2024: 0,563 | udział w PKB | z danych | consumption_nominal (Eurostat nama_10_gdp, P31_S14, CP_MNAC) / gdp_nominal (GUS BDL 458271), ostatni wspólny rok w bazie (2024, https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nama_10_gdp?geo=PL&na_item=P31_S14&unit=CP_MNAC) | 0,55–0,66 (2000–2024: 0,556–0,658) | Obie serie są w bazie (gdp_nominal jako seria pomocnicza bramki jednostek). Wartość jest liczona przy każdej symulacji (`simulate.resolve_constants`); brak serii lub udział poza 0,4–0,7 → zapas z `config.py` i status „założenie” w wyniku. Wartość w `config.py` nie zmieniona. | przy 0,563 zamiast 0,57: mediany 2025 przy domyślnych parametrach bez zmian (VAT 324,42, PIT 144,87, CIT 72,54 mld zł – udział wchodzi tylko przez odpowiedź PKB na scenariusz); skutki scenariuszy zmieniają się o mniej niż 0,01 mld zł |
 | `EMPLOYMENT_GDP_ELASTICITY` | 0,5 | elastyczność (bezwymiarowa) | założenie | brak (patrz Uwagi) | 0,25–0,8 | Literatura dla Polski (np. Bartosik 2020, Equilibrium 15(4), https://doi.org/10.24136/eq.2020.032) szacuje wrażliwość bezrobocia, nie zatrudnienia. Kontrola na danych w bazie (MNK na różnicach logarytmów zatrudnienia i PKB realnego): 0,52 (bł. std. 0,14) w 2006–2024, 0,40 (0,11) w 2011–2024 – zgodne z 0,5. Kandydat na „z danych”, ale zatrudnienie BDL pomija małe podmioty, a oszacowanie jest niepewne. |  |
+| `PIT_STATE_SHARE_SIGMA` | 0,2 | odchylenie logarytmu (bezwymiarowe) | założenie | brak (patrz Uwagi) | 0,1–0,3 | Odchylenie standardowe logarytmu losowego czynnika ε (lognormalnego, mediana 1) przy udziale budżetu państwa w PIT od 2025 r. Brak źródła: udział s₀ jest oszacowany z jednego roku (2025), więc nie ma serii, z której dałoby się policzyć jego rozrzut; 0,2 to założony rozrzut jednego punktu kalibracyjnego (przedział 0,1–0,3). | — |
 
 ## Wynik łączny (wszystkie zmiany Task 2)
 
@@ -109,7 +110,7 @@ oceny w osobnym kroku (poza zakresem: nie zmieniamy równań).
 
 ## Podsumowanie
 
-**Statusy po badaniu:** z danych 1, ze źródła 2, założenie 10 (z 13 stałych). Stałe z przeglądu, które wcześniej miały
+**Statusy po badaniu:** z danych 1, ze źródła 2, założenie 11 (z 14 stałych). Stałe z przeglądu, które wcześniej miały
 marker `PLACEHOLDER-UNVERIFIED`, a dziś mają źródło lub dane: `VAT_GAP`, `CIT_SMALL_TAXPAYER_SHARE`,
 `CONSUMPTION_GDP_SHARE`. Marker w `config.py` pozostał tylko przy założeniach (pilnuje tego
 `test_config_marker_only_on_assumptions`).

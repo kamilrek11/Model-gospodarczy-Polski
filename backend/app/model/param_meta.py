@@ -1,4 +1,4 @@
-"""Metadata registry for the 13 non-user constants of app.model.config.
+"""Metadata registry for the 14 non-user constants of app.model.config.
 
 status: from_data (computed from loaded series), sourced (published source with url),
 assumption (no verified source; `note` must say why).
@@ -167,6 +167,14 @@ PARAMETERS: dict[str, ParamMeta] = {
             "0,40 (0,11) dla 2011–2024 – zgodne z 0,5.",
             low=0.25,
             high=0.8,
+        ),
+        _a(
+            "PIT_STATE_SHARE_SIGMA",
+            "Odchylenie standardowe logarytmu losowego czynnika ε (lognormalnego, mediana 1) przy udziale budżetu państwa "
+            "w PIT od 2025 r. Brak źródła: udział s₀ jest oszacowany z jednego roku (2025), więc nie ma serii, z której "
+            "dałoby się policzyć jego rozrzut; 0,2 to założony rozrzut jednego punktu kalibracyjnego (przedział 0,1–0,3).",
+            low=0.1,
+            high=0.3,
         ),
     )
 }

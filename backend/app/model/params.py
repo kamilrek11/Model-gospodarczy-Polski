@@ -29,6 +29,10 @@ PARAMETER_SCHEMA: list[ParamSpec] = [
     _amount("pit_tax_free", "PIT - kwota wolna", "pit", 30000, "Roczna kwota wolna od podatku.", 200_000),
     _rate("pit_flat_rate", "PIT - podatek liniowy", "pit", 0.19, "Stawka podatku liniowego."),
     _rate("pit_lump_rate_default", "PIT - ryczałt (stawka domyślna)", "pit", 0.12, "Domyślna stawka ryczałtu od przychodów ewidencjonowanych."),
+    ParamSpec(
+        "pit_state_share_mult", "PIT - udział budżetu państwa (mnożnik względem 2025)", "pit", "mnożnik", 1.0, 0.5, 2.0, 0.05,
+        "Mnożnik udziału budżetu państwa w PIT względem 2025 r. (1 = udział z 2025 r.); udział oszacowany z jednego roku.",
+    ),
     _rate("vat_rate_standard", "VAT - stawka podstawowa", "vat", 0.23, "Podstawowa stawka VAT."),
     _rate("vat_rate_reduced1", "VAT - stawka obniżona I", "vat", 0.08, "Pierwsza obniżona stawka VAT."),
     _rate("vat_rate_reduced2", "VAT - stawka obniżona II", "vat", 0.05, "Druga obniżona stawka VAT."),

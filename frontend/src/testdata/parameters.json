@@ -66,6 +66,17 @@
     "description": "Domyślna stawka ryczałtu od przychodów ewidencjonowanych."
   },
   {
+    "key": "pit_state_share_mult",
+    "label": "PIT - udział budżetu państwa (mnożnik względem 2025)",
+    "tax": "pit",
+    "unit": "mnożnik",
+    "default": 1.0,
+    "min": 0.5,
+    "max": 2.0,
+    "step": 0.05,
+    "description": "Mnożnik udziału budżetu państwa w PIT względem 2025 r. (1 = udział z 2025 r.); udział oszacowany z jednego roku."
+  },
+  {
     "key": "vat_rate_standard",
     "label": "VAT - stawka podstawowa",
     "tax": "vat",

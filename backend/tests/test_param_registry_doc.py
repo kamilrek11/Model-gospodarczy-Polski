@@ -31,6 +31,7 @@ PRE_VALUES = {
     "HOUSEHOLD_MPC": 0.6,
     "CONSUMPTION_GDP_SHARE": 0.57,
     "EMPLOYMENT_GDP_ELASTICITY": 0.5,
+    "PIT_STATE_SHARE_SIGMA": 0.2,  # added later; unchanged by definition
 }
 
 
@@ -78,8 +79,8 @@ def registry() -> dict[str, dict]:
     return parse_registry(REGISTRY)
 
 
-def test_registry_covers_exactly_the_13_parameters(registry):
-    assert len(PARAMETERS) == 13
+def test_registry_covers_exactly_the_14_parameters(registry):
+    assert len(PARAMETERS) == 14
     assert set(registry) == set(PARAMETERS), set(registry) ^ set(PARAMETERS)
 
 
