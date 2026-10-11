@@ -34,6 +34,8 @@ Baza SQLite leży w nazwanym wolumenie `budget-data` (`/data/budget.db`). Health
 bash scripts/demo-real-data.sh      # lokalnie albo w GitHub Codespaces; http://localhost:5173
 ```
 
+Wymaga wolnych portów 8000 (API) i 5173 (aplikacja); gdy któryś jest zajęty, skrypt przerywa z komunikatem (zmiana: `API_PORT=8010 WEB_PORT=5174 bash scripts/demo-real-data.sh`). Jeśli widzisz "Brak danych źródłowych", frontend rozmawia z innym, pustym backendem – zatrzymaj go i uruchom skrypt ponownie.
+
 Skrypt uruchamia backend i frontend na zatwierdzonej migawce prawdziwych danych `demo/real-data.db`
 (GUS BDL, Eurostat, MF; stan z 2026-10-11, `synthetic=0`, raport: `docs/data-sources-discovery.md`). Odświeżanie jest wyłączone.
 
