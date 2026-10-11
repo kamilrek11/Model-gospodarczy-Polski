@@ -40,6 +40,16 @@ Calibration
     state-budget PIT share) are never used (calibration_years).
     Note: historical years are evaluated at CURRENT law, not the law in force then.
 
+State-budget PIT share (spec 2026-10-11-udzial-pit-design.md)
+    From the rev_pit break year b (2025 reform of local-government financing) the reported PIT is
+        PIT_state = PIT (current law, pre-reform calibration) * s0 * m * eps
+    s0 = rev_pit[b] / PIT module output for b (estimate_state_share: from the stored wage bill of b when
+    available, else the median baseline forecast for b); m = pit_state_share_mult (the baseline uses m = 1);
+    eps = exp(PIT_STATE_SHARE_SIGMA * z), z ~ N(0, 1) per path from a separate generator, the same eps for the
+    baseline and the scenario. The share only scales the REPORTED PIT after _scenario: the disposable-income
+    channel and the second round still use total PIT. Without rev_pit[b] (or a module value for b): s0 = 1,
+    no eps, and the PIT_STATE_SHARE assumption row says so; years before b are never scaled.
+
 A module whose required series is missing (or not usable) is disabled with a message;
 no data is ever invented. All non-user constants come from app.model.config and those
 registered in app.model.param_meta are listed in `assumptions` with their status.
@@ -47,6 +57,7 @@ registered in app.model.param_meta are listed in `assumptions` with their status
 
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -105,6 +116,7 @@ class SimResult:
     calibration: dict[str, dict] = field(default_factory=dict)
     assumptions: list[dict] = field(default_factory=list)
     disabled_modules: list[dict] = field(default_factory=list)
+    state_share: "StateShare | None" = None  # not serialised; the PIT_STATE_SHARE assumption row carries it
 
     def to_dict(self) -> dict:
         return {
@@ -282,6 +294,89 @@ def _prepare(model: MacroModel, history: dict[str, pd.DataFrame]) -> tuple[_Cont
     return ctx, calibration, disabled
 
 
+# ---------------------------------------------------------------- state-budget PIT share
+
+
+@dataclass(frozen=True)
+class StateShare:
+    s0: float
+    year: int | None  # break year of rev_pit (first year under the new rules)
+    source: Literal["data", "forecast", "none"]
+    note: str  # Polish: how s0 was obtained, or why the pre-reform rules are used
+
+
+def _pl(x: float, digits: int = 3) -> str:
+    return f"{x:.{digits}f}".replace(".", ",")
+
+
+def estimate_state_share(
+    model: MacroModel, history: dict[str, pd.DataFrame], ctx: _Context, years: list[int], pit_base: np.ndarray
+) -> StateShare:
+    """s0 = recorded rev_pit in the break year / PIT module output for that year (current law, pre-reform calibration).
+
+    Module output: from the stored wage_nominal * employment of the break year when both are recorded ('data'),
+    else the median of `pit_base` (baseline PIT paths, shape (n_paths, len(years))) in that year ('forecast').
+    Anything missing or a non-positive / non-finite ratio gives s0 = 1 ('none'). Never raises.
+    """
+    b = config.STRUCTURAL_BREAKS.get("rev_pit")
+
+    def none(why: str) -> StateShare:
+        rules = f"PIT liczony według zasad sprzed {b} r." if b is not None else "PIT liczony bez udziału budżetu państwa."
+        return StateShare(1.0, b, "none", f"{rules} Nie oszacowano udziału budżetu państwa: {why}.")
+
+    if b is None:
+        return none("brak zadeklarowanego załamania strukturalnego serii rev_pit")
+    if "pit" not in ctx.enabled:
+        return none("moduł PIT jest wyłączony")
+    rev = _series(history, "rev_pit")
+    if b not in rev.index:
+        return none(f"brak wykonania rev_pit za {b} r. w danych")
+    rev_b = float(rev.loc[b])
+    wage, emp = _series(history, "wage_nominal"), _series(history, "employment")
+    if b in wage.index and b in emp.index:
+        bill = np.array([float(wage.loc[b]) * float(emp.loc[b])])
+        module = float(_pit(bill, ctx.dist, defaults(), ctx.calib["pit"])[0])
+        source, how = "data", f"wynik modułu PIT z danych makro za {b} r."
+    elif b in years and pit_base.ndim == 2 and pit_base.shape[1] == len(years) and pit_base.shape[0] > 0:
+        module = float(np.median(pit_base[:, years.index(b)]))
+        source, how = "forecast", f"mediana prognozy modułu PIT na {b} r.; brak pełnych danych makro za {b} r."
+    else:
+        return none(f"brak danych makro za {b} r. i rok {b} poza horyzontem prognozy")
+    s0 = rev_b / module if module != 0 else float("nan")
+    if not np.isfinite(s0) or s0 <= 0:
+        return none(f"nieprawidłowa relacja wykonania do wyniku modułu za {b} r.")
+    note = (
+        f"s₀ = {_pl(s0)}: wykonanie rev_pit {b} r. {_pl(rev_b, 2)} mld zł ÷ {_pl(module, 2)} mld zł "
+        f"({how}, obecne prawo i kalibracja sprzed załamania)."
+    )
+    return StateShare(float(s0), int(b), source, note)
+
+
+def _state_share_row(share: StateShare, m: float) -> dict:
+    sigma = float(config.PIT_STATE_SHARE_SIGMA)
+    if share.source == "none":
+        note = share.note + (f" Mnożnik użytkownika {_pl(m, 2)} działa od {share.year} r. bez rozrzutu Monte Carlo." if share.year is not None else "")
+        return {"key": "PIT_STATE_SHARE", "value": share.s0, "status": "assumption", "year": share.year, "note": note}
+    note = (
+        f"Udział budżetu państwa w PIT od {share.year} r. (reforma finansowania JST). {share.note} "
+        f"Mnożnik użytkownika m = {_pl(m, 2)}, efektywny udział s₀×m = {_pl(share.s0 * m)}. "
+        f"Oszacowane z jednego roku ({share.year}): s₀ zawiera też błąd prognozy modelu dla tego roku. "
+        f"Rozrzut Monte Carlo: czynnik lognormalny o medianie 1 i odchyleniu logarytmu σ = {_pl(sigma, 2)} "
+        "(PIT_STATE_SHARE_SIGMA), wspólny dla bazy i scenariusza na każdej ścieżce."
+    )
+    return {
+        "key": "PIT_STATE_SHARE",
+        "value": share.s0,
+        "status": "calibrated",
+        "year": share.year,
+        "note": note,
+        "source": f"obliczono: wykonanie MF (rev_pit {share.year}) ÷ moduł PIT",
+        "low": share.s0 * float(np.exp(-sigma)),
+        "high": share.s0 * float(np.exp(sigma)),
+        "range_text": f"s₀·exp(∓σ), σ = {_pl(sigma, 2)}",
+    }
+
+
 # ---------------------------------------------------------------- simulation
 
 
@@ -371,6 +466,18 @@ def simulate(
     base_taxes, base_macro = _scenario(lv, law, law, ctx, pit_first_law)
     taxes, macro = _scenario(lv, p, law, ctx, pit_first_law)
 
+    # state-budget PIT share: only the reported PIT, after the feedback channels (see module docstring)
+    years = list(range(model.last_year + 1, model.last_year + 1 + horizon))
+    share = estimate_state_share(model, history, ctx, years, base_taxes.get("pit", np.empty((0, horizon))))
+    if "pit" in taxes and share.year is not None:
+        after = (np.array(years) >= share.year)[None, :]
+        eps = 1.0
+        if share.source != "none":
+            eps_rng = np.random.default_rng([seed, 7]) if seed is not None else np.random.default_rng()
+            eps = np.exp(config.PIT_STATE_SHARE_SIGMA * eps_rng.standard_normal((n_paths, 1)))
+        base_taxes["pit"] = base_taxes["pit"] * np.where(after, share.s0 * eps, 1.0)
+        taxes["pit"] = taxes["pit"] * np.where(after, share.s0 * p["pit_state_share_mult"] * eps, 1.0)
+
     zeros = np.zeros((n_paths, horizon))
     total = sum(taxes.values(), zeros)
     base_total = sum(base_taxes.values(), zeros)
@@ -392,13 +499,14 @@ def simulate(
         {"key": f"calibration.{t}", "value": c["factor"], "status": "calibrated", "note": c["method"] + f" ({c['years'][0]}-{c['years'][-1]})"}
         for t, c in calibration.items()
     ]
+    assumptions.append(_state_share_row(share, float(p["pit_state_share_mult"])))
 
     for a in assumptions:  # uniform row shape
         for k, v in (("source", ""), ("year", None), ("url", ""), ("low", None), ("high", None), ("range_text", "")):
             a.setdefault(k, v)
 
     return SimResult(
-        years=list(range(model.last_year + 1, model.last_year + 1 + horizon)),
+        years=years,
         taxes={t: _bands(v) for t, v in taxes.items()},
         baseline=baseline,
         total=_bands(total),
@@ -406,4 +514,5 @@ def simulate(
         calibration=calibration,
         assumptions=assumptions,
         disabled_modules=disabled,
+        state_share=share,
     )

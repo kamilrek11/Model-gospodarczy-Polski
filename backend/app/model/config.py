@@ -106,7 +106,9 @@ CONSUMPTION_GDP_SHARE: float = 0.57
 # PLACEHOLDER-UNVERIFIED: illustrative value (data check 0.40-0.52, see docs/model-parameters.md).
 EMPLOYMENT_GDP_ELASTICITY: float = 0.5
 
-# Log-sd of the lognormal noise on the state's PIT share from 2025 (median 1); see docs/model-parameters.md.
+# Log-sd of the lognormal Monte Carlo factor eps = exp(sigma * z), z ~ N(0, 1), median 1, one draw per path
+# (shared by baseline and scenario), on the state-budget PIT share s0 * m from the rev_pit break year;
+# see simulate.estimate_state_share and docs/model-parameters.md.
 # PLACEHOLDER-UNVERIFIED: no source; scatter of a single calibration point (one year, 2025).
 PIT_STATE_SHARE_SIGMA: float = 0.2
 

@@ -622,6 +622,18 @@
    "low": null,
    "high": null,
    "range_text": ""
+  },
+  {
+   "key": "PIT_STATE_SHARE",
+   "value": 1.0,
+   "status": "assumption",
+   "year": 2025,
+   "note": "PIT liczony według zasad sprzed 2025 r. Nie oszacowano udziału budżetu państwa: brak wykonania rev_pit za 2025 r. w danych. Mnożnik użytkownika 1,00 działa od 2025 r. bez rozrzutu Monte Carlo.",
+   "source": "",
+   "url": "",
+   "low": null,
+   "high": null,
+   "range_text": ""
   }
  ],
  "disabled_modules": [],
