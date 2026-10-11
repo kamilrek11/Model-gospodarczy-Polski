@@ -185,6 +185,29 @@ test.describe("seeded store (synthetic data)", () => {
     expect(pdfBytes.length).toBeGreaterThan(2000);
   });
 
+  test("quality tab shows status badges and sources for model constants", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("metric-row")).toContainText("mld zł");
+    await page.getByRole("tab", { name: "Jakość modelu" }).click();
+    const table = page.getByRole("table", { name: /Stałe i założenia modelu/ });
+    await expect(table.locator(".badge", { hasText: "założenie" }).first()).toBeVisible();
+    await expect(table.locator(".badge", { hasText: "ze źródła" }).first()).toBeVisible();
+    await expect(table.locator(".badge", { hasText: "z danych" }).first()).toBeVisible();
+    await expect(page.locator(".results")).not.toContainText("PLACEHOLDER");
+
+    // long notes are collapsed to one row-friendly lead; the full text opens on demand
+    const more = table.locator(".expandable-more").first();
+    await expect(more).toBeVisible();
+    const details = table.locator("details.expandable").first();
+    await expect(details).not.toHaveAttribute("open", "");
+    await more.click();
+    await expect(details).toHaveAttribute("open", "");
+    await expect(details.locator(".cell-text")).toBeVisible();
+    // rows stay compact: no collapsed row is taller than ~220 px at desktop width
+    const heights = await table.locator("tbody tr").evaluateAll((rows) => rows.map((r) => (r as HTMLElement).offsetHeight));
+    expect(Math.min(...heights)).toBeLessThan(220);
+  });
+
   test("importing a scenario with an out-of-range value is rejected in Polish", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByLabel(VAT_LABEL, { exact: true })).toBeVisible();

@@ -9,7 +9,7 @@ from app.api.refresh import get_store
 from app.main import app
 from app.model.macro import MACRO_VARS, MacroModel, fit_macro
 from app.model.params import defaults
-from app.model import config
+from app.model import config, param_meta
 from app.model.simulate import BANDS, simulate
 from app.model.taxes.vat import vat_revenue
 from app.store import Store
@@ -29,6 +29,7 @@ def synthetic_history(n_years: int = 20, seed: int = 5) -> dict[str, pd.DataFram
     gs = 0.4 * nominal_gdp * noise()
     wage_bill = levels["wage_nominal"] * levels["employment"] / 100.0
     hist["gross_surplus"] = pd.DataFrame({"value": gs})
+    hist["gdp_nominal"] = pd.DataFrame({"value": levels["consumption_nominal"] / 0.57})  # synthetic, ratio 0.57
     hist["rev_pit"] = pd.DataFrame({"value": 0.08 * wage_bill * noise()})
     hist["rev_cit"] = pd.DataFrame({"value": 0.03 * gs * noise()})
     hist["rev_vat"] = pd.DataFrame({"value": 0.12 * levels["consumption_nominal"] * noise()})
@@ -146,19 +147,14 @@ def test_calibration_reproduces_history_and_is_exposed(model, hist):
         assert 0.8 * last < res.baseline[tax]["median"][0] < 1.3 * last
 
 
-def test_assumptions_flag_placeholders_generated_from_config(model, hist):
+def test_assumptions_carry_status_and_source_from_meta(model, hist):
     res = simulate(model, hist, defaults(), n_paths=200, seed=0)
-    flagged = {a["key"] for a in res.assumptions if a["status"] == "PLACEHOLDER-UNVERIFIED"}
-    for key in (
-        "PIT_INCOME_DIST_DEFAULT",
-        "VAT_CONSUMPTION_SHARES",
-        "VAT_GAP",
-        "VAT_PRICE_ELASTICITY",
-        "CIT_SMALL_TAXPAYER_SHARE",
-        "PIT_BUSINESS_FLAT_SHARE",
-        "HOUSEHOLD_MPC",
-    ):
-        assert key in flagged, key
+    by_key = {a["key"]: a for a in res.assumptions}
+    for key in param_meta.PARAMETERS:
+        a = by_key[key]
+        assert a["status"] in ("from_data", "sourced", "assumption"), key
+        assert a["note"], key
+        assert {"source", "year", "url", "low", "high"} <= set(a), key
     assert all(a["note"] for a in res.assumptions)
 
 
@@ -302,3 +298,121 @@ def test_assumptions_contain_pit_break_note(model, hist):
     # all sources now deliver mld zł; the unit is enforced by the dataset gate, not by a placeholder factor
     assert "CONSUMPTION_SERIES_TO_MLD_ZL" not in notes
     assert not hasattr(config, "CONSUMPTION_SERIES_TO_MLD_ZL")
+
+
+# ---------------------------------------------------------------- constants computed from stored data
+
+
+def _real_history() -> dict[str, pd.DataFrame]:
+    from app.data.dataset import assemble
+    from tests.real_dataset import real_results
+
+    return {k: df for k, (_, df) in assemble(real_results()).items()}
+
+
+def _assumption(res, key):
+    return next(a for a in res.assumptions if a["key"] == key)
+
+
+def test_consumption_gdp_share_computed_from_history():
+    from app.model.simulate import resolve_constants
+
+    hist = _real_history()
+    got = resolve_constants(hist)["CONSUMPTION_GDP_SHARE"]
+    assert got == pytest.approx(0.563, abs=0.01)
+    both = pd.concat([hist["consumption_nominal"]["value"], hist["gdp_nominal"]["value"]], axis=1, join="inner").dropna()
+    assert got == pytest.approx(both.iloc[-1, 0] / both.iloc[-1, 1])
+
+    model, h = real_history_with_2025_bases()
+    res = simulate(model, h, defaults(), horizon=1, n_paths=50, seed=0)
+    a = _assumption(res, "CONSUMPTION_GDP_SHARE")
+    assert a["status"] == "from_data" and a["value"] == pytest.approx(got) and a["year"] == int(both.index[-1])
+    ratios = both.iloc[:, 0] / both.iloc[:, 1]
+    assert f"{got:.3f}".replace(".", ",") + f" w {int(both.index[-1])} r." in a["note"]
+    assert f"{ratios.min():.3f}-{ratios.max():.3f}".replace(".", ",") in a["note"]
+    assert "0,563" not in param_meta.PARAMETERS["CONSUMPTION_GDP_SHARE"].note  # no data numbers in the static note
+    assert param_meta.PARAMETERS["CONSUMPTION_GDP_SHARE"].status == "from_data"  # registry stays static
+
+
+def test_missing_series_falls_back_and_is_reported_as_assumption(model, hist):
+    from app.model.simulate import resolve_constants
+
+    hist = {k: v for k, v in hist.items() if k != "gdp_nominal"}
+    assert resolve_constants(hist)["CONSUMPTION_GDP_SHARE"] == config.CONSUMPTION_GDP_SHARE
+    a = _assumption(simulate(model, hist, defaults(), n_paths=50, seed=0), "CONSUMPTION_GDP_SHARE")
+    assert a["status"] == "assumption" and a["value"] == config.CONSUMPTION_GDP_SHARE and a["year"] is None
+    assert "gdp_nominal" in a["note"] and "zapasowej" in a["note"]
+    assert param_meta.PARAMETERS["CONSUMPTION_GDP_SHARE"].status == "from_data"
+
+
+def test_out_of_range_ratio_falls_back_and_is_reported(model, hist):
+    from app.model.simulate import resolve_constants
+
+    bad = dict(hist)
+    bad["gdp_nominal"] = pd.DataFrame({"value": hist["consumption_nominal"]["value"] * 5.0})  # ratio 0.2
+    assert resolve_constants(bad)["CONSUMPTION_GDP_SHARE"] == config.CONSUMPTION_GDP_SHARE
+    a = _assumption(simulate(model, bad, defaults(), n_paths=50, seed=0), "CONSUMPTION_GDP_SHARE")
+    assert a["status"] == "assumption" and "poza dopuszczalnym zakresem" in a["note"]
+
+
+def test_simulate_uses_computed_share_not_config(model, hist):
+    p = {"pit_rate_low": 0.10}
+    base = simulate(model, hist, p, horizon=2, n_paths=100, seed=3)
+    with_share = dict(hist)
+    with_share["gdp_nominal"] = pd.DataFrame({"value": hist["consumption_nominal"]["value"] / 0.65})  # ratio 0.65
+    res = simulate(model, with_share, p, horizon=2, n_paths=100, seed=3)
+    assert _assumption(res, "CONSUMPTION_GDP_SHARE")["value"] == pytest.approx(0.65)
+    d_base = base.macro["pkb_real"]["median"][0] / base.macro["pkb_real"]["baseline"][0] - 1
+    d_new = res.macro["pkb_real"]["median"][0] / res.macro["pkb_real"]["baseline"][0] - 1
+    assert d_new != pytest.approx(d_base) and abs(d_new) > abs(d_base)  # larger share -> larger GDP response
+
+
+def test_no_common_year_and_zero_or_nan_gdp_fall_back(model, hist):
+    from app.model.simulate import resolve_constants
+
+    cons = hist["consumption_nominal"]
+    disjoint = {"consumption_nominal": cons, "gdp_nominal": pd.DataFrame({"value": [1000.0]}, index=pd.Index([1800], name="year"))}
+    assert resolve_constants(disjoint)["CONSUMPTION_GDP_SHARE"] == config.CONSUMPTION_GDP_SHARE
+    for bad_gdp in (0.0, float("nan")):
+        h = {"consumption_nominal": cons, "gdp_nominal": pd.DataFrame({"value": bad_gdp}, index=cons.index)}
+        assert resolve_constants(h)["CONSUMPTION_GDP_SHARE"] == config.CONSUMPTION_GDP_SHARE
+
+
+def test_api_simulate_and_backtest_use_stored_gdp_nominal(tmp_path):
+    from app.data.dataset import assemble
+    from tests.real_dataset import real_results
+
+    series = assemble(real_results())
+    assert "gdp_nominal" in series
+    store = Store(str(tmp_path / "real.db"))
+    hist = {k: df for k, (_, df) in series.items()}
+    store.save_snapshot(series, synthetic_model_real(hist).to_dict(), {"updated_at": "2026-01-01T00:00:00+00:00", "synthetic": "0"})
+    app.dependency_overrides[get_store] = lambda: store
+    try:
+        client = TestClient(app)
+        r = client.post("/simulate", json={"n_paths": 100, "horizon": 1, "seed": 1})
+        assert r.status_code == 200
+        a = next(x for x in r.json()["assumptions"] if x["key"] == "CONSUMPTION_GDP_SHARE")
+        assert a["status"] == "from_data" and a["year"] == 2024 and a["value"] == pytest.approx(0.563, abs=0.01)
+        assert "zapasowej" not in a["note"] and "w 2024 r." in a["note"]
+        assert "assumptions" not in client.get("/backtest").json()  # backtest response exposes no assumptions to assert on
+        assert client.get("/backtest").status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+def synthetic_model_real(hist):
+    macro = pd.concat({v: hist[v]["value"] for v in MACRO_VARS}, axis=1).dropna()
+    return fit_macro(macro, lags=1)
+
+
+def test_computed_share_outside_registered_range_is_flagged_and_notes_use_decimal_comma(model, hist):
+    from app.model.simulate import METHOD_CHOICES
+
+    low = dict(hist)
+    low["gdp_nominal"] = pd.DataFrame({"value": hist["consumption_nominal"]["value"] / 0.45})  # ratio 0.45 < 0.55
+    a = _assumption(simulate(model, low, defaults(), n_paths=50, seed=0), "CONSUMPTION_GDP_SHARE")
+    assert a["status"] == "from_data" and "poza zakresem rejestru (0,550–0,660)" in a["note"]
+    fb = _assumption(simulate(model, {k: v for k, v in hist.items() if k != "gdp_nominal"}, defaults(), n_paths=50, seed=0), "CONSUMPTION_GDP_SHARE")
+    assert "0,570" in fb["note"] and "0.57" not in fb["note"]
+    assert not any("Number of" in n or "Structural" in n for _, n in METHOD_CHOICES)

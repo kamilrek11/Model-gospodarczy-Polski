@@ -4,3 +4,4 @@ node_modules/
 *.db
 dist/
 .pytest_cache/
+!demo/real-data.db

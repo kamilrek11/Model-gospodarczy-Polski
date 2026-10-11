@@ -10,11 +10,11 @@ from pydantic import BaseModel, Field
 
 from app.api.refresh import get_store
 from app.model.macro import MACRO_VARS, MacroModel
-from app.model.simulate import REQUIRED_SERIES, simulate
+from app.model.simulate import REQUIRED_SERIES, SERIES_FROM_DATA, simulate
 from app.store import Store
 
 NO_DATA = "brak danych – uruchom odświeżenie"
-HISTORY_SERIES: tuple[str, ...] = tuple(dict.fromkeys([*MACRO_VARS, *(s for req in REQUIRED_SERIES.values() for s in req)]))
+HISTORY_SERIES: tuple[str, ...] = tuple(dict.fromkeys([*MACRO_VARS, *SERIES_FROM_DATA, *(s for req in REQUIRED_SERIES.values() for s in req)]))
 
 
 class SimulateRequest(BaseModel):

@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from pydantic import BaseModel
 
 from app.model.params import validate
-from app.model.simulate import BANDS, PLACEHOLDER
+from app.model.simulate import BANDS
 
 HEADER = ["year", "tax", *BANDS, "baseline"]
 PARAM_HEADER = ["parametr", "wartość"]
@@ -26,10 +26,15 @@ MAX_META_TEXT = 64
 
 META_TITLE = "# Metadane"
 SYNTHETIC_NOTE = "DANE SYNTETYCZNE – nie są to dane GUS/MF"
-PLACEHOLDER_SENTENCE = (
-    "Wyniki zależą od niezweryfikowanych stałych orientacyjnych (PLACEHOLDER-UNVERIFIED) wymienionych powyżej; "
+MAX_SOURCE_TEXT = 500
+ASSUMPTION_SENTENCE = (
+    "Wyniki zależą od niezweryfikowanych stałych o statusie „założenie” (brak źródła), wymienionych powyżej; "
     "należy je traktować jako ilustracyjne."
 )
+UNKNOWN_STATUS_SENTENCE = (
+    "Brak informacji o statusie stałych modelu (wynik bez pola assumptions); wyniki należy traktować jako ilustracyjne."
+)
+STATUS_LABEL = {"from_data": "z danych", "sourced": "ze źródła", "assumption": "założenie"}
 
 
 class ExportRequest(BaseModel):
@@ -73,24 +78,40 @@ def _meta_text(result: dict, key: str) -> str:
     return value
 
 
+def _num(v: float) -> str:
+    return f"{v:g}".replace(".", ",")
+
+
 def meta_rows(result: dict) -> list[list]:
     """Provenance taken from the /simulate response the frontend sends back; missing fields are tolerated."""
     synthetic = result.get("synthetic")
     if synthetic is not None and not isinstance(synthetic, bool):
         raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: synthetic")
     assumptions = result.get("assumptions")
-    if assumptions is None:
-        placeholders = "brak informacji"
-    else:
+    names: list[str] = []
+    constants: list[list] = []
+    if assumptions is not None:
         if not isinstance(assumptions, list) or len(assumptions) > MAX_ASSUMPTIONS:
             raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
-        names = []
         for a in assumptions:
             if not isinstance(a, dict) or not isinstance(a.get("key"), str) or len(a["key"]) > MAX_META_TEXT:
                 raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
-            if PLACEHOLDER in str(a.get("status", "")):
+            status = a.get("status")
+            if isinstance(status, str) and "PLACEHOLDER" in status:
+                status = "assumption"  # results cached before the status registry
+            source, year, url = a.get("source") or "", a.get("year"), a.get("url") or ""
+            if not all(isinstance(t, str) and len(t) <= MAX_SOURCE_TEXT for t in (source, url)) or not (year is None or (isinstance(year, int) and not isinstance(year, bool))):
+                raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
+            low, high, range_text = a.get("low"), a.get("high"), a.get("range_text") or ""
+            is_num = lambda v: v is None or (isinstance(v, (int, float)) and not isinstance(v, bool))  # noqa: E731
+            if not (is_num(low) and is_num(high)) or not isinstance(range_text, str) or len(range_text) > MAX_SOURCE_TEXT:
+                raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
+            if status == "assumption":
                 names.append(a["key"])
-        placeholders = ", ".join(names) if names else "brak"
+            if status in STATUS_LABEL:
+                rng = range_text or (f"zakres {_num(low)}–{_num(high)}" if low is not None and high is not None else "")
+                parts = [STATUS_LABEL[status], source, "" if year is None else str(year), url, rng]
+                constants.append([f"stala_{a['key']}", "; ".join(p for p in parts if p)])
     rows = [
         ["dane_z", _meta_text(result, "data_updated_at")],
         ["wersja_modelu", _meta_text(result, "model_version")],
@@ -98,11 +119,13 @@ def meta_rows(result: dict) -> list[list]:
     ]
     if synthetic:
         rows.append(["uwaga", SYNTHETIC_NOTE])
-    rows += [
-        ["wygenerowano", datetime.now(UTC).isoformat(timespec="seconds")],
-        ["zalozenia_niezweryfikowane", placeholders],
-        ["zastrzezenie", PLACEHOLDER_SENTENCE],
-    ]
+    rows.append(["wygenerowano", datetime.now(UTC).isoformat(timespec="seconds")])
+    rows.append(["zalozenia_niezweryfikowane", "brak informacji" if assumptions is None else (", ".join(names) if names else "brak")])
+    rows += constants
+    if names:
+        rows.append(["zastrzezenie", f"{ASSUMPTION_SENTENCE} Założenia: {', '.join(names)}."])
+    elif assumptions is None:
+        rows.append(["zastrzezenie", UNKNOWN_STATUS_SENTENCE])
     return rows
 
 

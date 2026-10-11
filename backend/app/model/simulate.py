@@ -42,17 +42,16 @@ Calibration
 
 A module whose required series is missing (or not usable) is disabled with a message;
 no data is ever invented. All non-user constants come from app.model.config and those
-marked PLACEHOLDER-UNVERIFIED there are listed in `assumptions` automatically.
+registered in app.model.param_meta are listed in `assumptions` with their status.
 """
 
-import inspect
-import re
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 
 import numpy as np
 import pandas as pd
 
-from app.model import config
+from app.model import config, param_meta
 from app.model.macro import MacroModel
 from app.model.params import defaults, validate
 from app.model.taxes.cit import cit_revenue
@@ -61,7 +60,12 @@ from app.model.taxes.vat import consumption_feedback, effective_vat_rate, vat_re
 
 TAXES: tuple[str, ...] = ("pit", "cit", "vat")
 BANDS: dict[str, float] = {"median": 0.5, "p10": 0.1, "p90": 0.9, "p2_5": 0.025, "p97_5": 0.975}
-PLACEHOLDER = "PLACEHOLDER-UNVERIFIED"
+
+# method-choice constants (not parameters of the registry) still listed for transparency
+METHOD_CHOICES: tuple[tuple[str, str], ...] = (
+    ("CALIBRATION_YEARS", "Liczba ostatnich lat użytych do współczynników kalibracji każdego podatku (średnia relacji wykonania do wyniku modułu przy obecnym prawie). Wybór metody, nie wartość z danych."),
+    ("STRUCTURAL_BREAKS", "Załamania strukturalne: seria -> pierwszy rok zapisany według nowych zasad. Lata od załamania nie służą do kalibracji ani oceny backtestu. rev_pit: od 2025 r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania samorządów), 2024: 97,6 -> 2025: 28,75 mld zł (sprawozdania MF)."),
+)
 
 # series each module needs: macro bases (store names) + recorded revenue for calibration
 REQUIRED_SERIES: dict[str, tuple[str, ...]] = {
@@ -122,40 +126,71 @@ class _Context:
     dist: IncomeDist
     gs_anchor: float | None  # gross surplus in the model's last year
     nominal_gdp_anchor: float  # pkb_real * cpi in the model's last year
+    consumption_gdp_share: float  # from_data constant (resolve_constants)
 
 
 # ---------------------------------------------------------------- assumptions
 
 
-def placeholder_assumptions() -> list[dict]:
-    """Constants of app.model.config with their comment; status read from the markers.
+SERIES_FROM_DATA: tuple[str, ...] = ("consumption_nominal", "gdp_nominal")  # inputs of resolve_constants
+CONSUMPTION_SHARE_RANGE = (0.4, 0.7)  # plausibility gate for the computed consumption / GDP ratio
 
-    A constant without its own comment inherits the comment of the constant directly
-    above it (same block, no blank line), e.g. PIT_BUSINESS_FLAT_SHARE.
+
+def _resolve_details(history: dict[str, pd.DataFrame]) -> dict[str, dict]:
+    """from_data constants: key -> {value, status, year, note}. Never raises; falls back to config."""
+    key = "CONSUMPTION_GDP_SHARE"
+    pl = lambda x: f"{x:.3f}".replace(".", ",")  # noqa: E731
+    fallback = float(getattr(config, key))
+    cons, gdp = _series(history, "consumption_nominal"), _series(history, "gdp_nominal")
+    missing = [n for n, s in (("consumption_nominal", cons), ("gdp_nominal", gdp)) if s.empty]
+    if missing:
+        why = f"brak serii {', '.join(missing)} w danych"
+    else:
+        both = pd.concat([cons.rename("c"), gdp.rename("g")], axis=1, join="inner").dropna()
+        both = both[both["g"] > 0]
+        if both.empty:
+            why = "brak wspólnego roku obu serii"
+        else:
+            year, row = int(both.index[-1]), both.iloc[-1]
+            ratio = float(row["c"] / row["g"])
+            lo, hi = CONSUMPTION_SHARE_RANGE
+            if np.isfinite(ratio) and lo <= ratio <= hi:
+                ratios = both["c"] / both["g"]
+                note = f"Obliczono z danych: {pl(ratio)} w {year} r. (zakres {int(both.index[0])}-{year}: {pl(ratios.min())}-{pl(ratios.max())})."
+                meta = param_meta.PARAMETERS[key]
+                if meta.low is not None and meta.high is not None and not meta.low <= ratio <= meta.high:
+                    note += f" Wartość poza zakresem rejestru ({pl(meta.low)}–{pl(meta.high)})."
+                return {key: {"value": ratio, "status": "from_data", "year": year, "note": note}}
+            why = f"obliczony udział {pl(ratio)} ({year} r.) poza dopuszczalnym zakresem {pl(lo)}–{pl(hi)}"
+    note = f"Użyto wartości zapasowej {pl(fallback)}: {why}."
+    return {key: {"value": fallback, "status": "assumption", "year": None, "note": note}}
+
+
+def resolve_constants(history: dict[str, pd.DataFrame]) -> dict[str, float]:
+    """Values of the `from_data` constants: computed from the stored series, else the config fallback."""
+    return {k: d["value"] for k, d in _resolve_details(history).items()}
+
+
+def parameter_assumptions(history: dict[str, pd.DataFrame] | None = None) -> list[dict]:
+    """Registered config constants (param_meta) with status/source, plus the method-choice constants.
+
+    from_data constants report the value actually used (resolve_constants) and the last year used; when they could
+    not be computed the row says `assumption` and why. param_meta.PARAMETERS itself is never changed.
     """
-    out: list[dict] = []
-    comments: list[str] = []
-    last_note: str | None = None
-    for line in inspect.getsource(config).splitlines():
-        stripped = line.strip()
-        if not stripped:
-            comments, last_note = [], None
-        elif stripped.startswith("#"):
-            text = stripped.lstrip("#").strip()
-            if text and not text.startswith("---"):
-                comments.append(text)
-        elif m := re.match(r"^([A-Z][A-Z0-9_]*)\s*(?::[^=]*)?=", line):
-            note = " ".join(comments) if comments else last_note
-            comments, last_note = [], note
-            name = m.group(1)
-            value = getattr(config, name)
-            out.append({
-                "key": name,
-                "value": [list(r) for r in value] if isinstance(value, tuple) else value,
-                "status": PLACEHOLDER if note and PLACEHOLDER in note else "documented",
-                "note": (note or "").replace(f"{PLACEHOLDER}:", "").replace(PLACEHOLDER, "").strip() or name,
-            })
-    return out
+    rows = param_meta.assumption_rows()
+    if history is not None:
+        details = _resolve_details(history)
+        for r in rows:
+            d = details.get(r["key"])
+            if d is None:
+                continue
+            r["value"], r["status"] = d["value"], d["status"]
+            r["year"] = d["year"]
+            r["note"] = f"{r['note']} {d['note']}"
+    return rows + [
+        {"key": k, "value": deepcopy(getattr(config, k)), "status": "model-structure", "note": n, "source": "", "year": None, "url": "", "low": None, "high": None, "range_text": ""}
+        for k, n in METHOD_CHOICES
+    ]
 
 
 # ---------------------------------------------------------------- history helpers
@@ -242,6 +277,7 @@ def _prepare(model: MacroModel, history: dict[str, pd.DataFrame]) -> tuple[_Cont
         dist=dist,
         gs_anchor=gs_anchor,
         nominal_gdp_anchor=float(lv["pkb_real"] * lv["cpi"]),
+        consumption_gdp_share=resolve_constants(history)["CONSUMPTION_GDP_SHARE"],
     )
     return ctx, calibration, disabled
 
@@ -289,7 +325,7 @@ def _scenario(lv: dict[str, np.ndarray], p: dict, law: dict, ctx: _Context, pit_
     f_vat = consumption_feedback(eff_law, eff_new, config.VAT_PRICE_ELASTICITY)
     price = (1.0 + eff_new) / (1.0 + eff_law)
     c_factor = np.maximum((1.0 + f_vat) * pit_factor, 0.0)
-    gdp_factor = np.maximum(1.0 + config.CONSUMPTION_GDP_SHARE * (c_factor - 1.0), 0.0)
+    gdp_factor = np.maximum(1.0 + ctx.consumption_gdp_share * (c_factor - 1.0), 0.0)
     emp_factor = np.maximum(1.0 + config.EMPLOYMENT_GDP_ELASTICITY * (gdp_factor - 1.0), 0.0)
     macro = {
         "pkb_real": gdp * gdp_factor,
@@ -346,7 +382,7 @@ def simulate(
         for v in macro
     }
 
-    assumptions = placeholder_assumptions()
+    assumptions = parameter_assumptions(history)
     assumptions += [{"key": k, "value": None, "status": "model-structure", "note": n} for k, n in STRUCTURAL_ASSUMPTIONS]
     assumptions += [
         {"key": f"structure.break.{name}", "value": year, "status": "model-structure", "note": BREAK_NOTES.get(name, f"Załamanie strukturalne serii {name} od {year} r.")}
@@ -356,6 +392,10 @@ def simulate(
         {"key": f"calibration.{t}", "value": c["factor"], "status": "calibrated", "note": c["method"] + f" ({c['years'][0]}-{c['years'][-1]})"}
         for t, c in calibration.items()
     ]
+
+    for a in assumptions:  # uniform row shape
+        for k, v in (("source", ""), ("year", None), ("url", ""), ("low", None), ("high", None), ("range_text", "")):
+            a.setdefault(k, v)
 
     return SimResult(
         years=list(range(model.last_year + 1, model.last_year + 1 + horizon)),

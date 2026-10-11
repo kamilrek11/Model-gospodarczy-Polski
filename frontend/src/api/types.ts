@@ -45,6 +45,12 @@ export interface Assumption {
   value: AssumptionValue;
   status: string;
   note: string;
+  source?: string;
+  year?: number | null;
+  url?: string;
+  low?: number | null;
+  high?: number | null;
+  range_text?: string;
 }
 
 export interface DisabledModule {

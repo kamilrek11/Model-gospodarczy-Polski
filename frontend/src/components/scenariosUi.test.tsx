@@ -73,13 +73,13 @@ describe("QualityTab", () => {
   const simWith = {
     ...sim,
     assumptions: [
-      { key: "vat.split", value: 0.5, status: "PLACEHOLDER-UNVERIFIED", note: "rough split" },
-      { key: "cit.base", value: 1.2, status: "documented", note: "GUS" },
+      { key: "vat.split", value: 0.5, status: "assumption", note: "rough split" },
+      { key: "cit.base", value: 1.2, status: "sourced", note: "GUS" },
     ],
     calibration: { pit: { factor: 1.0345, years: [2022, 2023, 2024], method: "mediana" } },
   };
 
-  it("renders backtest numbers, notes, assumptions and the PLACEHOLDER marker", async () => {
+  it("renders backtest numbers, notes, assumptions and the assumption marker", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json(bt)));
     render(<QualityTab sim={simWith} />);
     const row = (await screen.findByText("4,3%")).closest("tr")!;
@@ -88,10 +88,9 @@ describe("QualityTab", () => {
     expect(row).toHaveTextContent("95,0%");
     expect(screen.getByText(/początki prognoz: 7, pominięte: 2/)).toBeInTheDocument();
     expect(screen.getByText(/obecnym prawie/)).toBeInTheDocument();
-    const items = screen.getAllByText("PLACEHOLDER-UNVERIFIED");
-    expect(items.length).toBeGreaterThan(0);
-    expect(screen.getByText("vat.split").closest("li")).toHaveClass("placeholder");
-    expect(screen.getByText("cit.base").closest("li")).not.toHaveClass("placeholder");
+    expect(screen.getAllByText("założenie").length).toBeGreaterThan(0);
+    expect(screen.getByText("vat.split").closest("tr")).toHaveClass("placeholder");
+    expect(screen.getByText("cit.base").closest("tr")).not.toHaveClass("placeholder");
     expect(screen.getByRole("row", { name: /PIT.*1,0345/ })).toBeInTheDocument();
   });
 

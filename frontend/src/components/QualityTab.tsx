@@ -2,11 +2,43 @@ import { useEffect, useState } from "react";
 import { ApiError, getBacktest } from "../api/client";
 import type { AssumptionValue, BacktestResult, SimulationResult, TaxKey } from "../api/types";
 import { TAX_LABEL, TAX_ORDER } from "../charts/palette";
+import { ExpandableText, SHORT_LIMIT } from "./ExpandableText";
 
 const pctFmt = new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const numFmt = new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 });
+const numFmtPlain = new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 });
+const numFmtSci = new Intl.NumberFormat("pl-PL", { notation: "scientific", maximumFractionDigits: 3 });
+/** Wartości o module < 0,001 (np. współczynnik kalibracji PIT ~7e-9) w zapisie naukowym, żeby nie wyglądały jak „0”. */
+const numFmt = {
+  format: (v: number): string => (v !== 0 && Math.abs(v) < 0.001 ? numFmtSci.format(v) : numFmtPlain.format(v)),
+};
 
-export const isPlaceholder = (status: string): boolean => status.includes("PLACEHOLDER");
+/** Wyniki zapisane przed rejestrem statusów miały status z napisem PLACEHOLDER – traktujemy jak „założenie”. */
+const normalizeStatus = (status: string): string => (status.includes("PLACEHOLDER") ? "assumption" : status);
+export const isPlaceholder = (status: string): boolean => normalizeStatus(status) === "assumption";
+
+const STATUS_LABEL: Record<string, string> = {
+  from_data: "z danych",
+  sourced: "ze źródła",
+  assumption: "założenie",
+  "model-structure": "struktura modelu",
+  calibrated: "kalibracja",
+  documented: "udokumentowane",
+};
+export const statusLabel = (status: string): string => STATUS_LABEL[normalizeStatus(status)] ?? status;
+
+/** Tylko http(s): adres ze źródła zewnętrznego nie może być linkiem javascript: ani data:. */
+const isHttpUrl = (u: string | undefined): u is string => {
+  if (!u) return false;
+  try {
+    const p = new URL(u).protocol;
+    return p === "http:" || p === "https:";
+  } catch {
+    return false;
+  }
+};
+
+const rangeText = (low: number | null | undefined, high: number | null | undefined, text?: string): string =>
+  typeof low === "number" && typeof high === "number" ? `${numFmt.format(low)}–${numFmt.format(high)}` : text || "–";
 
 const fmtValue = (v: unknown): string => (typeof v === "number" && Number.isFinite(v) ? numFmt.format(v) : "–");
 
@@ -141,19 +173,62 @@ export function QualityTab({ sim, refreshKey = 0 }: { sim: SimulationResult | nu
           <>
             {placeholders.length > 0 && (
               <p className="notice warn" role="note">
-                {placeholders.length} z założeń to wartości orientacyjne, niezweryfikowane (PLACEHOLDER-UNVERIFIED). Wyniki zależą od nich – traktuj je ostrożnie.
+                {placeholders.length} stałych ma status „założenie” (brak źródła) – to wartości orientacyjne. Wyniki zależą od nich, więc traktuj je ostrożnie.
               </p>
             )}
-            <ul className="assumptions">
-              {sim.assumptions.map((a) => (
-                <li key={a.key} className={isPlaceholder(a.status) ? "assumption placeholder" : "assumption"}>
-                  <code>{a.key}</code>
-                  <AssumptionValueView value={a.value} label={a.key} />{" "}
-                  <span className={isPlaceholder(a.status) ? "badge badge-warn" : "badge"}>{a.status}</span>
-                  <small>{a.note}</small>
-                </li>
-              ))}
-            </ul>
+            <div className="table-scroll">
+              <table className="data-table assumptions-table">
+                <caption>Stałe i założenia modelu: status, źródło i zakres niepewności</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Stała</th>
+                    <th scope="col">Wartość</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Źródło</th>
+                    <th scope="col">Zakres</th>
+                    <th scope="col">Uwagi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sim.assumptions.map((a) => {
+                    const src = a.source ? `${a.source}${a.year ? ` (${a.year})` : ""}` : a.year ? `${a.year}` : "–";
+                    return (
+                      <tr key={a.key} className={isPlaceholder(a.status) ? "assumption placeholder" : "assumption"}>
+                        <th scope="row">
+                          <code>{a.key}</code>
+                        </th>
+                        <td>
+                          <AssumptionValueView value={a.value} label={a.key} />
+                        </td>
+                        <td>
+                          <span className={isPlaceholder(a.status) ? "badge badge-warn" : "badge"}>{statusLabel(a.status)}</span>
+                        </td>
+                        <td>
+                          {isHttpUrl(a.url) && src.length <= SHORT_LIMIT ? (
+                            <a href={a.url} target="_blank" rel="noopener noreferrer">
+                              {src === "–" ? a.url : src}
+                            </a>
+                          ) : (
+                            <>
+                              {src === "–" ? src : <ExpandableText text={src} />}
+                              {isHttpUrl(a.url) && (
+                                <a className="source-link" href={a.url} target="_blank" rel="noopener noreferrer">
+                                  Otwórz źródło
+                                </a>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        <td>{rangeText(a.low, a.high, a.range_text)}</td>
+                        <td>
+                          <ExpandableText text={a.note} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             <h3>Współczynniki kalibracji</h3>
             {Object.keys(sim.calibration).length === 0 ? (
               <p className="note">Brak kalibracji.</p>
