@@ -16,6 +16,7 @@ const STATUS_LABEL: Record<string, string> = {
   assumption: "założenie",
   "model-structure": "struktura modelu",
   calibrated: "kalibracja",
+  documented: "udokumentowane",
 };
 export const statusLabel = (status: string): string => STATUS_LABEL[normalizeStatus(status)] ?? status;
 
@@ -30,8 +31,8 @@ const isHttpUrl = (u: string | undefined): u is string => {
   }
 };
 
-const rangeText = (low: number | null | undefined, high: number | null | undefined): string =>
-  typeof low === "number" && typeof high === "number" ? `${numFmt.format(low)}–${numFmt.format(high)}` : "–";
+const rangeText = (low: number | null | undefined, high: number | null | undefined, text?: string): string =>
+  typeof low === "number" && typeof high === "number" ? `${numFmt.format(low)}–${numFmt.format(high)}` : text || "–";
 
 const fmtValue = (v: unknown): string => (typeof v === "number" && Number.isFinite(v) ? numFmt.format(v) : "–");
 
@@ -166,7 +167,7 @@ export function QualityTab({ sim, refreshKey = 0 }: { sim: SimulationResult | nu
           <>
             {placeholders.length > 0 && (
               <p className="notice warn" role="note">
-                {placeholders.length} z założeń nie ma źródła (status „założenie”) – to wartości orientacyjne. Wyniki zależą od nich, więc traktuj je ostrożnie.
+                {placeholders.length} stałych ma status „założenie” (brak źródła) – to wartości orientacyjne. Wyniki zależą od nich, więc traktuj je ostrożnie.
               </p>
             )}
             <div className="table-scroll">
@@ -205,7 +206,7 @@ export function QualityTab({ sim, refreshKey = 0 }: { sim: SimulationResult | nu
                             src
                           )}
                         </td>
-                        <td>{rangeText(a.low, a.high)}</td>
+                        <td>{rangeText(a.low, a.high, a.range_text)}</td>
                         <td>
                           <small>{a.note}</small>
                         </td>

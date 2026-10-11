@@ -404,3 +404,15 @@ def test_api_simulate_and_backtest_use_stored_gdp_nominal(tmp_path):
 def synthetic_model_real(hist):
     macro = pd.concat({v: hist[v]["value"] for v in MACRO_VARS}, axis=1).dropna()
     return fit_macro(macro, lags=1)
+
+
+def test_computed_share_outside_registered_range_is_flagged_and_notes_use_decimal_comma(model, hist):
+    from app.model.simulate import METHOD_CHOICES
+
+    low = dict(hist)
+    low["gdp_nominal"] = pd.DataFrame({"value": hist["consumption_nominal"]["value"] / 0.45})  # ratio 0.45 < 0.55
+    a = _assumption(simulate(model, low, defaults(), n_paths=50, seed=0), "CONSUMPTION_GDP_SHARE")
+    assert a["status"] == "from_data" and "poza zakresem rejestru (0,550–0,660)" in a["note"]
+    fb = _assumption(simulate(model, {k: v for k, v in hist.items() if k != "gdp_nominal"}, defaults(), n_paths=50, seed=0), "CONSUMPTION_GDP_SHARE")
+    assert "0,570" in fb["note"] and "0.57" not in fb["note"]
+    assert not any("Number of" in n or "Structural" in n for _, n in METHOD_CHOICES)

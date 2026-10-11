@@ -50,6 +50,7 @@ export interface Assumption {
   url?: string;
   low?: number | null;
   high?: number | null;
+  range_text?: string;
 }
 
 export interface DisabledModule {

@@ -5,8 +5,8 @@ assumption (no verified source; `note` must say why).
 Values stay in config.py; this module only describes them.
 """
 
-from dataclasses import dataclass
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Literal
 
 from app.model import config
@@ -24,10 +24,11 @@ class ParamMeta:
     low: float | None = None
     high: float | None = None
     note: str = ""
+    range_text: str = ""  # textual range for dict/matrix constants (must open the register's Zakres cell)
 
 
-def _a(key: str, note: str, low: float | None = None, high: float | None = None) -> ParamMeta:
-    return ParamMeta(key=key, status="assumption", note=note, low=low, high=high)
+def _a(key: str, note: str, low: float | None = None, high: float | None = None, range_text: str = "") -> ParamMeta:
+    return ParamMeta(key=key, status="assumption", note=note, low=low, high=high, range_text=range_text)
 
 
 # Sources: full list with the numbers read from them in docs/model-parameters.md.
@@ -65,6 +66,7 @@ PARAMETERS: dict[str, ParamMeta] = {
             "domowych podają wydatki według COICOP, nie według stawek; przypisanie stawek do COICOP wymagałoby "
             "własnej mapy). Kontrola: KE (VAT gap 2025, tab. 10) – luka stawek obniżonych w Polsce 2023 to 18,6% "
             "dochodu idealnego, z czego żywność 10,3 pkt.",
+            range_text="standard 0,45–0,65; reduced1 0,10–0,20; reduced2 0,08–0,20; zero 0,10–0,25",
         ),
         ParamMeta(
             key="VAT_GAP",
@@ -108,6 +110,7 @@ PARAMETERS: dict[str, ParamMeta] = {
             "nie wyznaczają kształtu rozkładu w pobliżu kwoty wolnej, gdzie powstaje progresja. Zastępczy rozkład jest "
             "zgodny z udziałem podatników powyżej progu (7,2% vs 7,3% po indeksacji płacą). Patrz sekcja "
             "„Rozkład dochodów PIT” w docs/model-parameters.md.",
+            range_text="elastyczność efektywnej stawki skali względem bazy 0,85 (rozkład zastępczy) – 1,03 (log-normalny z momentów MF 2021)",
         ),
         ParamMeta(key="PIT_BUSINESS_SCALE_SHARE", status="assumption", source=_SPLIT_SOURCE, year=2021, url=URL_PIT_2021, low=0.10, high=0.15, note=_SPLIT_NOTE),
         ParamMeta(key="PIT_BUSINESS_FLAT_SHARE", status="assumption", source=_SPLIT_SOURCE, year=2021, url=URL_PIT_2021, low=0.52, high=0.78, note=_SPLIT_NOTE),
@@ -184,5 +187,6 @@ def assumption_rows() -> list[dict]:
             "url": m.url,
             "low": m.low,
             "high": m.high,
+            "range_text": m.range_text,
         })
     return rows

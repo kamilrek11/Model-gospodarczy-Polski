@@ -84,7 +84,7 @@ describe("QualityTab constant provenance table", () => {
     expect(within(screen.getByText("BAD", { selector: "code" }).closest("tr")!).queryByRole("link")).toBeNull();
     expect(screen.getByText("ASM", { selector: "code" }).closest("tr")).toHaveClass("placeholder");
     expect(screen.getByText("SRC", { selector: "code" }).closest("tr")).not.toHaveClass("placeholder");
-    expect(screen.getByRole("note")).toHaveTextContent("1 z założeń");
+    expect(screen.getByRole("note")).toHaveTextContent("1 stałych ma status");
   });
 
   it("shows no warning when every constant has a source", async () => {
@@ -102,7 +102,19 @@ describe("QualityTab constant provenance table", () => {
     const row = screen.getByText("OLD", { selector: "code" }).closest("tr")!;
     expect(row).toHaveClass("placeholder");
     expect(row).toHaveTextContent("założenie");
-    expect(screen.getByRole("note")).toHaveTextContent("1 z założeń");
+    expect(screen.getByRole("note")).toHaveTextContent("1 stałych ma status");
     expect(container.textContent).not.toMatch(/PLACEHOLDER/);
+  });
+
+  it("shows the textual range for dict/matrix constants and a Polish label for documented", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(bt)));
+    const r = [
+      { key: "DICT", value: { a: 1 }, status: "assumption", note: "n", range_text: "a 0,1–0,2", low: null, high: null },
+      { key: "OLDDOC", value: 1, status: "documented", note: "n" },
+    ];
+    render(<QualityTab sim={{ ...sim, assumptions: r } as SimulationResult} />);
+    await screen.findByText("brak");
+    expect(screen.getByText("DICT", { selector: "code" }).closest("tr")).toHaveTextContent("a 0,1–0,2");
+    expect(screen.getByText("OLDDOC", { selector: "code" }).closest("tr")).toHaveTextContent("udokumentowane");
   });
 });

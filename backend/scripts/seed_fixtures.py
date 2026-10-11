@@ -92,6 +92,7 @@ def synthetic_panel(n_years: int = N_YEARS, seed: int = 20260101) -> dict[str, p
     gross_surplus = 0.4 * nominal_gdp * noise()
     wage_bill = lv["wage_nominal"] * lv["employment"] / 100.0
     panel = {v: lv[[v]].rename(columns={v: "value"}) for v in MACRO_VARS}
+    panel["gdp_nominal"] = pd.DataFrame({"value": lv["consumption_nominal"] / 0.57}, index=idx)  # synthetic, like the rest
     panel["gross_surplus"] = pd.DataFrame({"value": gross_surplus}, index=idx)
     panel["rev_pit"] = pd.DataFrame({"value": 0.08 * wage_bill * noise()}, index=idx)
     panel["rev_cit"] = pd.DataFrame({"value": 0.03 * gross_surplus * noise()}, index=idx)

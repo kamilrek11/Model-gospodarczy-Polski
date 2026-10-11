@@ -273,7 +273,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": "standard 0,45–0,65; reduced1 0,10–0,20; reduced2 0,08–0,20; zero 0,10–0,25"
   },
   {
    "key": "VAT_GAP",
@@ -284,7 +285,8 @@
    "year": 2024,
    "url": "https://taxation-customs.ec.europa.eu/document/download/b3045343-a25a-4fcf-97c8-b27c413b95ad_en?filename=VAT-GAP-2025-tables.xlsx",
    "low": 0.048,
-   "high": 0.16
+   "high": 0.16,
+   "range_text": ""
   },
   {
    "key": "VAT_PRICE_ELASTICITY",
@@ -295,7 +297,8 @@
    "year": null,
    "url": "",
    "low": -1.0,
-   "high": 0.0
+   "high": 0.0,
+   "range_text": ""
   },
   {
    "key": "CIT_SMALL_TAXPAYER_SHARE",
@@ -306,7 +309,8 @@
    "year": 2021,
    "url": "https://api.dane.gov.pl/media/resources/20221219/Infromacja_dotycz%C4%85ca_rozliczenia_podatku_CIT_za_2021_r..pdf",
    "low": 0.05,
-   "high": 0.12
+   "high": 0.12,
+   "range_text": ""
   },
   {
    "key": "PIT_INCOME_DIST_DEFAULT",
@@ -374,7 +378,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": "elastyczność efektywnej stawki skali względem bazy 0,85 (rozkład zastępczy) – 1,03 (log-normalny z momentów MF 2021)"
   },
   {
    "key": "PIT_BUSINESS_SCALE_SHARE",
@@ -385,7 +390,8 @@
    "year": 2021,
    "url": "https://api.dane.gov.pl/media/resources/20230102/INFORMACJA_PIT_za_2021.pdf",
    "low": 0.1,
-   "high": 0.15
+   "high": 0.15,
+   "range_text": ""
   },
   {
    "key": "PIT_BUSINESS_FLAT_SHARE",
@@ -396,7 +402,8 @@
    "year": 2021,
    "url": "https://api.dane.gov.pl/media/resources/20230102/INFORMACJA_PIT_za_2021.pdf",
    "low": 0.52,
-   "high": 0.78
+   "high": 0.78,
+   "range_text": ""
   },
   {
    "key": "PIT_BUSINESS_LUMP_SHARE",
@@ -407,7 +414,8 @@
    "year": 2021,
    "url": "https://api.dane.gov.pl/media/resources/20230102/INFORMACJA_PIT_za_2021.pdf",
    "low": 0.07,
-   "high": 0.37
+   "high": 0.37,
+   "range_text": ""
   },
   {
    "key": "PIT_LUMP_REVENUE_TO_INCOME",
@@ -418,7 +426,8 @@
    "year": null,
    "url": "",
    "low": 1.5,
-   "high": 4.0
+   "high": 4.0,
+   "range_text": ""
   },
   {
    "key": "PIT_BUSINESS_INCOME_TO_WAGE_BILL",
@@ -429,7 +438,8 @@
    "year": 2021,
    "url": "https://api.dane.gov.pl/media/resources/20230102/INFORMACJA_PIT_za_2021.pdf",
    "low": 0.37,
-   "high": 0.55
+   "high": 0.55,
+   "range_text": ""
   },
   {
    "key": "HOUSEHOLD_MPC",
@@ -440,7 +450,8 @@
    "year": null,
    "url": "",
    "low": 0.3,
-   "high": 0.9
+   "high": 0.9,
+   "range_text": ""
   },
   {
    "key": "CONSUMPTION_GDP_SHARE",
@@ -451,7 +462,8 @@
    "year": 2019,
    "url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nama_10_gdp?geo=PL&na_item=P31_S14&unit=CP_MNAC",
    "low": 0.55,
-   "high": 0.66
+   "high": 0.66,
+   "range_text": ""
   },
   {
    "key": "EMPLOYMENT_GDP_ELASTICITY",
@@ -462,18 +474,20 @@
    "year": null,
    "url": "",
    "low": 0.25,
-   "high": 0.8
+   "high": 0.8,
+   "range_text": ""
   },
   {
    "key": "CALIBRATION_YEARS",
    "value": 3,
    "status": "model-structure",
-   "note": "Number of most recent years used for the per-tax calibration factors (mean ratio of recorded revenue to module output at current law). Method choice, not a data value.",
+   "note": "Liczba ostatnich lat użytych do współczynników kalibracji każdego podatku (średnia relacji wykonania do wyniku modułu przy obecnym prawie). Wybór metody, nie wartość z danych.",
    "source": "",
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   },
   {
    "key": "STRUCTURAL_BREAKS",
@@ -481,12 +495,13 @@
     "rev_pit": 2025
    },
    "status": "model-structure",
-   "note": "Structural breaks: series -> first year recorded under new rules. Years >= the break are not used for calibration or scored by the backtest. rev_pit: from 2025 the state budget keeps a much smaller PIT share (local-government financing reform), 2024 97.6 -> 2025 28.75 mld zł (MF reports).",
+   "note": "Załamania strukturalne: seria -> pierwszy rok zapisany według nowych zasad. Lata od załamania nie służą do kalibracji ani oceny backtestu. rev_pit: od 2025 r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania samorządów), 2024: 97,6 -> 2025: 28,75 mld zł (sprawozdania MF).",
    "source": "",
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   },
   {
    "key": "structure.vat_base",
@@ -497,7 +512,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   },
   {
    "key": "structure.second_round",
@@ -508,7 +524,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   },
   {
    "key": "structure.wages_fixed",
@@ -519,7 +536,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   },
   {
    "key": "structure.gross_surplus_projection",
@@ -530,7 +548,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   },
   {
    "key": "structure.calibration_current_law",
@@ -541,7 +560,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   },
   {
    "key": "structure.break.rev_pit",
@@ -552,7 +572,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   },
   {
    "key": "calibration.pit",
@@ -563,7 +584,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   },
   {
    "key": "calibration.cit",
@@ -574,7 +596,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   },
   {
    "key": "calibration.vat",
@@ -585,7 +608,8 @@
    "year": null,
    "url": "",
    "low": null,
-   "high": null
+   "high": null,
+   "range_text": ""
   }
  ],
  "disabled_modules": [],

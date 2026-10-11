@@ -131,6 +131,15 @@ def test_range_column_matches_meta(registry):
             assert (_num(m[1]), _num(m[2])) == (meta.low, meta.high), key
 
 
+def test_range_text_matches_register(registry):
+    for key, meta in PARAMETERS.items():
+        cell = registry[key]["Zakres"]
+        if meta.range_text:
+            assert cell.startswith(meta.range_text), f"{key}: {meta.range_text!r} vs {cell!r}"
+        if meta.status == "assumption":
+            assert (meta.low is not None and meta.high is not None) or meta.range_text, f"{key}: no range to display"
+
+
 def test_assumptions_explain_missing_source(registry):
     for key, meta in PARAMETERS.items():
         if meta.status == "assumption":

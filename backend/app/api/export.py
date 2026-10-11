@@ -31,6 +31,9 @@ ASSUMPTION_SENTENCE = (
     "Wyniki zależą od niezweryfikowanych stałych o statusie „założenie” (brak źródła), wymienionych powyżej; "
     "należy je traktować jako ilustracyjne."
 )
+UNKNOWN_STATUS_SENTENCE = (
+    "Brak informacji o statusie stałych modelu (wynik bez pola assumptions); wyniki należy traktować jako ilustracyjne."
+)
 STATUS_LABEL = {"from_data": "z danych", "sourced": "ze źródła", "assumption": "założenie"}
 
 
@@ -75,6 +78,10 @@ def _meta_text(result: dict, key: str) -> str:
     return value
 
 
+def _num(v: float) -> str:
+    return f"{v:g}".replace(".", ",")
+
+
 def meta_rows(result: dict) -> list[list]:
     """Provenance taken from the /simulate response the frontend sends back; missing fields are tolerated."""
     synthetic = result.get("synthetic")
@@ -95,13 +102,16 @@ def meta_rows(result: dict) -> list[list]:
             source, year, url = a.get("source") or "", a.get("year"), a.get("url") or ""
             if not all(isinstance(t, str) and len(t) <= MAX_SOURCE_TEXT for t in (source, url)) or not (year is None or (isinstance(year, int) and not isinstance(year, bool))):
                 raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
+            low, high, range_text = a.get("low"), a.get("high"), a.get("range_text") or ""
+            is_num = lambda v: v is None or (isinstance(v, (int, float)) and not isinstance(v, bool))  # noqa: E731
+            if not (is_num(low) and is_num(high)) or not isinstance(range_text, str) or len(range_text) > MAX_SOURCE_TEXT:
+                raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
             if status == "assumption":
                 names.append(a["key"])
             if status in STATUS_LABEL:
-                parts = [STATUS_LABEL[status], source, "" if year is None else str(year), url]
-                while parts and parts[-1] == "":
-                    parts.pop()
-                constants.append([f"stala_{a['key']}", "; ".join(parts)])
+                rng = range_text or (f"zakres {_num(low)}–{_num(high)}" if low is not None and high is not None else "")
+                parts = [STATUS_LABEL[status], source, "" if year is None else str(year), url, rng]
+                constants.append([f"stala_{a['key']}", "; ".join(p for p in parts if p)])
     rows = [
         ["dane_z", _meta_text(result, "data_updated_at")],
         ["wersja_modelu", _meta_text(result, "model_version")],
@@ -114,6 +124,8 @@ def meta_rows(result: dict) -> list[list]:
     rows += constants
     if names:
         rows.append(["zastrzezenie", f"{ASSUMPTION_SENTENCE} Założenia: {', '.join(names)}."])
+    elif assumptions is None:
+        rows.append(["zastrzezenie", UNKNOWN_STATUS_SENTENCE])
     return rows
 
 

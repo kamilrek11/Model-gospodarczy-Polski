@@ -160,3 +160,27 @@ def test_legacy_placeholder_status_counts_as_assumption(c, result):
     assert meta["zastrzezenie"].startswith(ASSUMPTION_SENTENCE) and "OLD" in meta["zastrzezenie"]
     assert meta["stala_OLD"].startswith("założenie")
     assert "PLACEHOLDER" not in meta["zastrzezenie"]
+
+
+def test_missing_assumptions_field_still_has_disclaimer(c, result):
+    bare = {k: v for k, v in result.items() if k != "assumptions"}
+    meta = meta_of(csv_rows(c.post("/export?format=csv", json={"params": {}, "result": bare})))
+    assert meta["zastrzezenie"]
+
+
+def test_constant_rows_carry_range_and_no_empty_fields(c, result):
+    rows = [
+        _row("NUM", "sourced", year=2021, low=0.05, high=0.12),
+        _row("TXT", "assumption", range_text="standard 0,45–0,65"),
+        _row("DATA", "from_data"),
+    ]
+    meta = meta_of(csv_rows(c.post("/export?format=csv", json={"params": {}, "result": _with(result, rows)})))
+    assert meta["stala_NUM"] == "ze źródła; 2021; zakres 0,05–0,12"
+    assert meta["stala_TXT"] == "założenie; standard 0,45–0,65"
+    assert meta["stala_DATA"] == "z danych"
+
+
+@pytest.mark.parametrize("bad", [{"low": "x"}, {"high": True}, {"range_text": 5}, {"range_text": "x" * 3000}])
+def test_range_fields_validated(c, result, bad):
+    r = c.post("/export?format=csv", json={"params": {}, "result": _with(result, [_row("A", "sourced", **bad)])})
+    assert r.status_code == 422, r.text

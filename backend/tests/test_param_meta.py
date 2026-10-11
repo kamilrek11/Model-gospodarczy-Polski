@@ -60,7 +60,7 @@ def test_assumption_rows_have_all_keys():
     rows = assumption_rows()
     assert {r["key"] for r in rows} == KEYS
     for r in rows:
-        assert set(r) == {"key", "value", "status", "note", "source", "year", "url", "low", "high"}
+        assert set(r) == {"key", "value", "status", "note", "source", "year", "url", "low", "high", "range_text"}
     by_key = {r["key"]: r for r in rows}
     assert by_key["VAT_GAP"]["value"] == config.VAT_GAP
     assert by_key["PIT_INCOME_DIST_DEFAULT"]["value"][0] == [5_000, 3.0]

@@ -192,6 +192,7 @@ test.describe("seeded store (synthetic data)", () => {
     const table = page.getByRole("table", { name: /Stałe i założenia modelu/ });
     await expect(table.locator(".badge", { hasText: "założenie" }).first()).toBeVisible();
     await expect(table.locator(".badge", { hasText: "ze źródła" }).first()).toBeVisible();
+    await expect(table.locator(".badge", { hasText: "z danych" }).first()).toBeVisible();
     await expect(page.locator(".results")).not.toContainText("PLACEHOLDER");
   });
 

@@ -45,9 +45,8 @@ no data is ever invented. All non-user constants come from app.model.config and 
 registered in app.model.param_meta are listed in `assumptions` with their status.
 """
 
-from dataclasses import dataclass, field, replace
-
 from copy import deepcopy
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 import pandas as pd
@@ -64,8 +63,8 @@ BANDS: dict[str, float] = {"median": 0.5, "p10": 0.1, "p90": 0.9, "p2_5": 0.025,
 
 # method-choice constants (not parameters of the registry) still listed for transparency
 METHOD_CHOICES: tuple[tuple[str, str], ...] = (
-    ("CALIBRATION_YEARS", "Number of most recent years used for the per-tax calibration factors (mean ratio of recorded revenue to module output at current law). Method choice, not a data value."),
-    ("STRUCTURAL_BREAKS", "Structural breaks: series -> first year recorded under new rules. Years >= the break are not used for calibration or scored by the backtest. rev_pit: from 2025 the state budget keeps a much smaller PIT share (local-government financing reform), 2024 97.6 -> 2025 28.75 mld zł (MF reports)."),
+    ("CALIBRATION_YEARS", "Liczba ostatnich lat użytych do współczynników kalibracji każdego podatku (średnia relacji wykonania do wyniku modułu przy obecnym prawie). Wybór metody, nie wartość z danych."),
+    ("STRUCTURAL_BREAKS", "Załamania strukturalne: seria -> pierwszy rok zapisany według nowych zasad. Lata od załamania nie służą do kalibracji ani oceny backtestu. rev_pit: od 2025 r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania samorządów), 2024: 97,6 -> 2025: 28,75 mld zł (sprawozdania MF)."),
 )
 
 # series each module needs: macro bases (store names) + recorded revenue for calibration
@@ -140,6 +139,7 @@ CONSUMPTION_SHARE_RANGE = (0.4, 0.7)  # plausibility gate for the computed consu
 def _resolve_details(history: dict[str, pd.DataFrame]) -> dict[str, dict]:
     """from_data constants: key -> {value, status, year, note}. Never raises; falls back to config."""
     key = "CONSUMPTION_GDP_SHARE"
+    pl = lambda x: f"{x:.3f}".replace(".", ",")  # noqa: E731
     fallback = float(getattr(config, key))
     cons, gdp = _series(history, "consumption_nominal"), _series(history, "gdp_nominal")
     missing = [n for n, s in (("consumption_nominal", cons), ("gdp_nominal", gdp)) if s.empty]
@@ -156,11 +156,13 @@ def _resolve_details(history: dict[str, pd.DataFrame]) -> dict[str, dict]:
             lo, hi = CONSUMPTION_SHARE_RANGE
             if np.isfinite(ratio) and lo <= ratio <= hi:
                 ratios = both["c"] / both["g"]
-                pl = lambda x: f"{x:.3f}".replace(".", ",")  # noqa: E731
                 note = f"Obliczono z danych: {pl(ratio)} w {year} r. (zakres {int(both.index[0])}-{year}: {pl(ratios.min())}-{pl(ratios.max())})."
+                meta = param_meta.PARAMETERS[key]
+                if meta.low is not None and meta.high is not None and not meta.low <= ratio <= meta.high:
+                    note += f" Wartość poza zakresem rejestru ({pl(meta.low)}–{pl(meta.high)})."
                 return {key: {"value": ratio, "status": "from_data", "year": year, "note": note}}
-            why = f"obliczony udział {ratio:.3f} ({year} r.) poza dopuszczalnym zakresem {lo}-{hi}"
-    note = f"Użyto wartości zapasowej {fallback}: {why}."
+            why = f"obliczony udział {pl(ratio)} ({year} r.) poza dopuszczalnym zakresem {pl(lo)}–{pl(hi)}"
+    note = f"Użyto wartości zapasowej {pl(fallback)}: {why}."
     return {key: {"value": fallback, "status": "assumption", "year": None, "note": note}}
 
 
@@ -186,7 +188,7 @@ def parameter_assumptions(history: dict[str, pd.DataFrame] | None = None) -> lis
             r["year"] = d["year"]
             r["note"] = f"{r['note']} {d['note']}"
     return rows + [
-        {"key": k, "value": deepcopy(getattr(config, k)), "status": "model-structure", "note": n, "source": "", "year": None, "url": "", "low": None, "high": None}
+        {"key": k, "value": deepcopy(getattr(config, k)), "status": "model-structure", "note": n, "source": "", "year": None, "url": "", "low": None, "high": None, "range_text": ""}
         for k, n in METHOD_CHOICES
     ]
 
@@ -392,7 +394,7 @@ def simulate(
     ]
 
     for a in assumptions:  # uniform row shape
-        for k, v in (("source", ""), ("year", None), ("url", ""), ("low", None), ("high", None)):
+        for k, v in (("source", ""), ("year", None), ("url", ""), ("low", None), ("high", None), ("range_text", "")):
             a.setdefault(k, v)
 
     return SimResult(
