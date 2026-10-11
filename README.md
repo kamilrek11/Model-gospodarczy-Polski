@@ -28,6 +28,15 @@ Baza SQLite leży w nazwanym wolumenie `budget-data` (`/data/budget.db`). Health
 > `docker compose config`. Build obrazów, `docker compose up --wait`, `nginx -t` i test dymny (SPA oraz proxy `/api`)
 > uruchamia i przechodzi workflow CI (zadanie „Docker" w `.github/workflows/ci.yml`) na runnerze GitHub Actions.
 
+### Szybki podgląd na prawdziwych danych (demo)
+
+```bash
+bash scripts/demo-real-data.sh      # lokalnie albo w GitHub Codespaces; http://localhost:5173
+```
+
+Skrypt uruchamia backend i frontend na zatwierdzonej migawce prawdziwych danych `demo/real-data.db`
+(GUS BDL, Eurostat, MF; stan z 2026-10-11, `synthetic=0`, raport: `docs/data-sources-discovery.md`). Odświeżanie jest wyłączone.
+
 ### Lokalnie (dev)
 
 ```bash
