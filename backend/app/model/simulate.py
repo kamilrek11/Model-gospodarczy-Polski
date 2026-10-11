@@ -127,14 +127,64 @@ class _Context:
     dist: IncomeDist
     gs_anchor: float | None  # gross surplus in the model's last year
     nominal_gdp_anchor: float  # pkb_real * cpi in the model's last year
+    consumption_gdp_share: float = config.CONSUMPTION_GDP_SHARE  # from_data constant (resolve_constants)
 
 
 # ---------------------------------------------------------------- assumptions
 
 
-def parameter_assumptions() -> list[dict]:
-    """Registered config constants (param_meta) with status/source, plus the method-choice constants."""
-    return param_meta.assumption_rows() + [
+CONSUMPTION_SHARE_RANGE = (0.4, 0.7)  # plausibility gate for the computed consumption / GDP ratio
+
+
+def _resolve_details(history: dict[str, pd.DataFrame]) -> dict[str, dict]:
+    """from_data constants: key -> {value, status, year, note}. Never raises; falls back to config."""
+    key = "CONSUMPTION_GDP_SHARE"
+    fallback = float(getattr(config, key))
+    cons, gdp = _series(history, "consumption_nominal"), _series(history, "gdp_nominal")
+    missing = [n for n, s in (("consumption_nominal", cons), ("gdp_nominal", gdp)) if s.empty]
+    if missing:
+        why = f"brak serii {', '.join(missing)} w danych"
+    else:
+        both = pd.concat([cons.rename("c"), gdp.rename("g")], axis=1, join="inner").dropna()
+        both = both[both["g"] > 0]
+        if both.empty:
+            why = "brak wspólnego roku obu serii"
+        else:
+            year, row = int(both.index[-1]), both.iloc[-1]
+            ratio = float(row["c"] / row["g"])
+            lo, hi = CONSUMPTION_SHARE_RANGE
+            if np.isfinite(ratio) and lo <= ratio <= hi:
+                return {key: {"value": ratio, "status": "from_data", "year": year, "note": None}}
+            why = f"obliczony udział {ratio:.3f} ({year} r.) poza dopuszczalnym zakresem {lo}-{hi}"
+    note = f"Wartość zapasowa z config.py ({fallback}): {why}; stała nie została policzona z danych."
+    return {key: {"value": fallback, "status": "assumption", "year": None, "note": note}}
+
+
+def resolve_constants(history: dict[str, pd.DataFrame]) -> dict[str, float]:
+    """Values of the `from_data` constants: computed from the stored series, else the config fallback."""
+    return {k: d["value"] for k, d in _resolve_details(history).items()}
+
+
+def parameter_assumptions(history: dict[str, pd.DataFrame] | None = None) -> list[dict]:
+    """Registered config constants (param_meta) with status/source, plus the method-choice constants.
+
+    from_data constants report the value actually used (resolve_constants) and the last year used; when they could
+    not be computed the row says `assumption` and why. param_meta.PARAMETERS itself is never changed.
+    """
+    rows = param_meta.assumption_rows()
+    if history is not None:
+        details = _resolve_details(history)
+        for r in rows:
+            d = details.get(r["key"])
+            if d is None:
+                continue
+            r["value"], r["status"] = d["value"], d["status"]
+            if d["status"] == "from_data":
+                r["year"] = d["year"]
+            else:
+                r["year"] = None
+                r["note"] = f"{r['note']} {d['note']}"
+    return rows + [
         {"key": k, "value": deepcopy(getattr(config, k)), "status": "model-structure", "note": n, "source": "", "year": None, "url": "", "low": None, "high": None}
         for k, n in METHOD_CHOICES
     ]
@@ -224,6 +274,7 @@ def _prepare(model: MacroModel, history: dict[str, pd.DataFrame]) -> tuple[_Cont
         dist=dist,
         gs_anchor=gs_anchor,
         nominal_gdp_anchor=float(lv["pkb_real"] * lv["cpi"]),
+        consumption_gdp_share=resolve_constants(history)["CONSUMPTION_GDP_SHARE"],
     )
     return ctx, calibration, disabled
 
@@ -271,7 +322,7 @@ def _scenario(lv: dict[str, np.ndarray], p: dict, law: dict, ctx: _Context, pit_
     f_vat = consumption_feedback(eff_law, eff_new, config.VAT_PRICE_ELASTICITY)
     price = (1.0 + eff_new) / (1.0 + eff_law)
     c_factor = np.maximum((1.0 + f_vat) * pit_factor, 0.0)
-    gdp_factor = np.maximum(1.0 + config.CONSUMPTION_GDP_SHARE * (c_factor - 1.0), 0.0)
+    gdp_factor = np.maximum(1.0 + ctx.consumption_gdp_share * (c_factor - 1.0), 0.0)
     emp_factor = np.maximum(1.0 + config.EMPLOYMENT_GDP_ELASTICITY * (gdp_factor - 1.0), 0.0)
     macro = {
         "pkb_real": gdp * gdp_factor,
@@ -328,7 +379,7 @@ def simulate(
         for v in macro
     }
 
-    assumptions = parameter_assumptions()
+    assumptions = parameter_assumptions(history)
     assumptions += [{"key": k, "value": None, "status": "model-structure", "note": n} for k, n in STRUCTURAL_ASSUMPTIONS]
     assumptions += [
         {"key": f"structure.break.{name}", "value": year, "status": "model-structure", "note": BREAK_NOTES.get(name, f"Załamanie strukturalne serii {name} od {year} r.")}
