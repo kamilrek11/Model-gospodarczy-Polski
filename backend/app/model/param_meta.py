@@ -153,8 +153,8 @@ PARAMETERS: dict[str, ParamMeta] = {
             low=0.55,
             high=0.66,
             note="Udział konsumpcji gospodarstw domowych w PKB: zmiana realnej konsumpcji o x zmienia realny PKB o "
-            "CONSUMPTION_GDP_SHARE × x. Liczona z danych (2024: 0,563; zakres 2000–2024: 0,556–0,658); wartość w "
-            "config.py (0,57) to tylko zapas, gdy brak serii.",
+            "CONSUMPTION_GDP_SHARE × x. Liczona z danych przy każdej symulacji (reguła: ostatni wspólny rok obu serii); "
+            "wartość w config.py to tylko zapas, gdy brak serii lub udział poza 0,4–0,7.",
         ),
         _a(
             "EMPLOYMENT_GDP_ELASTICITY",

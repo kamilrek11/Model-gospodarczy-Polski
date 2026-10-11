@@ -155,7 +155,10 @@ def _resolve_details(history: dict[str, pd.DataFrame]) -> dict[str, dict]:
             ratio = float(row["c"] / row["g"])
             lo, hi = CONSUMPTION_SHARE_RANGE
             if np.isfinite(ratio) and lo <= ratio <= hi:
-                return {key: {"value": ratio, "status": "from_data", "year": year, "note": None}}
+                ratios = both["c"] / both["g"]
+                pl = lambda x: f"{x:.3f}".replace(".", ",")  # noqa: E731
+                note = f"Obliczono z danych: {pl(ratio)} w {year} r. (zakres {int(both.index[0])}-{year}: {pl(ratios.min())}-{pl(ratios.max())})."
+                return {key: {"value": ratio, "status": "from_data", "year": year, "note": note}}
             why = f"obliczony udział {ratio:.3f} ({year} r.) poza dopuszczalnym zakresem {lo}-{hi}"
     note = f"Użyto wartości zapasowej {fallback}: {why}."
     return {key: {"value": fallback, "status": "assumption", "year": None, "note": note}}
@@ -180,11 +183,8 @@ def parameter_assumptions(history: dict[str, pd.DataFrame] | None = None) -> lis
             if d is None:
                 continue
             r["value"], r["status"] = d["value"], d["status"]
-            if d["status"] == "from_data":
-                r["year"] = d["year"]
-            else:
-                r["year"] = None
-                r["note"] = f"{r['note']} {d['note']}"
+            r["year"] = d["year"]
+            r["note"] = f"{r['note']} {d['note']}"
     return rows + [
         {"key": k, "value": deepcopy(getattr(config, k)), "status": "model-structure", "note": n, "source": "", "year": None, "url": "", "low": None, "high": None}
         for k, n in METHOD_CHOICES

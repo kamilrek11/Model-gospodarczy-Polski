@@ -327,6 +327,10 @@ def test_consumption_gdp_share_computed_from_history():
     res = simulate(model, h, defaults(), horizon=1, n_paths=50, seed=0)
     a = _assumption(res, "CONSUMPTION_GDP_SHARE")
     assert a["status"] == "from_data" and a["value"] == pytest.approx(got) and a["year"] == int(both.index[-1])
+    ratios = both.iloc[:, 0] / both.iloc[:, 1]
+    assert f"{got:.3f}".replace(".", ",") + f" w {int(both.index[-1])} r." in a["note"]
+    assert f"{ratios.min():.3f}-{ratios.max():.3f}".replace(".", ",") in a["note"]
+    assert "0,563" not in param_meta.PARAMETERS["CONSUMPTION_GDP_SHARE"].note  # no data numbers in the static note
     assert param_meta.PARAMETERS["CONSUMPTION_GDP_SHARE"].status == "from_data"  # registry stays static
 
 
@@ -390,7 +394,8 @@ def test_api_simulate_and_backtest_use_stored_gdp_nominal(tmp_path):
         assert r.status_code == 200
         a = next(x for x in r.json()["assumptions"] if x["key"] == "CONSUMPTION_GDP_SHARE")
         assert a["status"] == "from_data" and a["year"] == 2024 and a["value"] == pytest.approx(0.563, abs=0.01)
-        assert "zapasowej" not in a["note"]
+        assert "zapasowej" not in a["note"] and "w 2024 r." in a["note"]
+        assert "assumptions" not in client.get("/backtest").json()  # backtest response exposes no assumptions to assert on
         assert client.get("/backtest").status_code == 200
     finally:
         app.dependency_overrides.clear()

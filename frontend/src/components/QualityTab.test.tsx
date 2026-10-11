@@ -38,6 +38,10 @@ describe("QualityTab with real backend assumptions", () => {
     await screen.findByText("brak");
     const row = screen.getByText("CONSUMPTION_GDP_SHARE", { selector: "code" }).closest("li")!;
     expect(row).toHaveTextContent("from_data");
+    const a = sim.assumptions.find((x) => x.key === "CONSUMPTION_GDP_SHARE")!;
+    expect(a.status).toBe("from_data");
+    expect(a.value).toBeCloseTo(0.57, 6); // synthetic gdp_nominal = consumption / 0.57
     expect(row).toHaveTextContent("= 0,57");
+    expect(row).toHaveTextContent(`0,570 w ${a.year} r.`);
   });
 });

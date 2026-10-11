@@ -446,7 +446,7 @@
    "key": "CONSUMPTION_GDP_SHARE",
    "value": 0.57,
    "status": "from_data",
-   "note": "Udział konsumpcji gospodarstw domowych w PKB: zmiana realnej konsumpcji o x zmienia realny PKB o CONSUMPTION_GDP_SHARE × x. Liczona z danych (2024: 0,563; zakres 2000–2024: 0,556–0,658); wartość w config.py (0,57) to tylko zapas, gdy brak serii.",
+   "note": "Udział konsumpcji gospodarstw domowych w PKB: zmiana realnej konsumpcji o x zmienia realny PKB o CONSUMPTION_GDP_SHARE × x. Liczona z danych przy każdej symulacji (reguła: ostatni wspólny rok obu serii); wartość w config.py to tylko zapas, gdy brak serii lub udział poza 0,4–0,7. Obliczono z danych: 0,570 w 2019 r. (zakres 2000-2019: 0,570-0,570).",
    "source": "consumption_nominal (Eurostat nama_10_gdp, P31_S14, CP_MNAC) / gdp_nominal (GUS BDL, zmienna 458271), ostatni wspólny rok w bazie",
    "year": 2019,
    "url": "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nama_10_gdp?geo=PL&na_item=P31_S14&unit=CP_MNAC",
