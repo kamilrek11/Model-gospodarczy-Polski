@@ -1,9 +1,10 @@
 """Non-user model parameters used by the tax modules.
 
-Every value carries either a source note or the marker PLACEHOLDER-UNVERIFIED.
-PLACEHOLDER-UNVERIFIED means the number is a rough, order-of-magnitude assumption
-that has NOT been checked against a published source and must be replaced
-(or confirmed) before results are presented as anything but illustrative.
+Every constant has a status in docs/model-parameters.md (machine-readable copy:
+app/model/param_meta.py): from_data, sourced or assumption. Only constants whose status is
+`assumption` carry the marker PLACEHOLDER-UNVERIFIED in the comment above them: the number has
+NO verified published source and must be replaced (or confirmed) before results are presented
+as anything but illustrative. tests/test_param_meta.py keeps the markers and the statuses in step.
 Tax functions stay pure: callers pass these values in as arguments.
 Status, source, year and uncertainty range of every constant: docs/model-parameters.md
 (machine-readable copy: app/model/param_meta.py).
@@ -14,7 +15,8 @@ Status, source, year and uncertainty range of every constant: docs/model-paramet
 # Share of nominal private consumption (gross of VAT) by VAT rate category.
 # Keys map to parameters: standard -> vat_rate_standard, reduced1 -> vat_rate_reduced1,
 # reduced2 -> vat_rate_reduced2, zero -> 0% / exempt (no output VAT).
-# PLACEHOLDER-UNVERIFIED: rough split; should come from MF/GUS data on consumption by VAT rate.
+# PLACEHOLDER-UNVERIFIED: rough split; no GUS/MF publication gives consumption by VAT rate.
+# Status and range: docs/model-parameters.md.
 VAT_CONSUMPTION_SHARES: dict[str, float] = {
     "standard": 0.55,
     "reduced1": 0.15,
@@ -30,7 +32,7 @@ VAT_GAP: float = 0.109
 
 # Price elasticity of real consumption demand w.r.t. the consumer price (gross of VAT).
 # Assumes full pass-through of VAT changes to consumer prices.
-# PLACEHOLDER-UNVERIFIED: illustrative value, no literature source verified.
+# PLACEHOLDER-UNVERIFIED: illustrative value, no literature source verified. See docs/model-parameters.md.
 VAT_PRICE_ELASTICITY: float = -0.5
 
 # ---------------------------------------------------------------- CIT
@@ -44,9 +46,8 @@ CIT_SMALL_TAXPAYER_SHARE: float = 0.08
 
 # Default taxable-income distribution of taxpayers on the tax scale (skala podatkowa),
 # as (mean annual taxable income in zł, number of taxpayers in millions) per group.
-# PLACEHOLDER-UNVERIFIED: synthetic distribution shaped to look plausible; should be
-# replaced by MF "Informacja dotycząca rozliczenia podatku dochodowego od osób fizycznych"
-# bracket data once loaded.
+# PLACEHOLDER-UNVERIFIED: synthetic distribution shaped to look plausible; MF publishes only two
+# brackets (see docs/model-parameters.md, section "Rozkład dochodów PIT").
 PIT_INCOME_DIST_DEFAULT: tuple[tuple[float, float], ...] = (
     (5_000, 3.0),
     (15_000, 2.5),
@@ -67,30 +68,32 @@ PIT_INCOME_DIST_DEFAULT: tuple[tuple[float, float], ...] = (
 # Split of non-agricultural business income by taxation form (shares sum to 1).
 # scale -> taxed on the scale together with wages, flat -> pit_flat_rate,
 # lump -> pit_lump_rate_default applied to revenue (see PIT_LUMP_REVENUE_TO_INCOME).
-# PLACEHOLDER-UNVERIFIED (assumption derived from MF 2021 data + the assumed PIT_LUMP_REVENUE_TO_INCOME).
 # Components (2021): MF "Informacja dotycząca rozliczenia PIT za 2021 r." - business income on the scale 43 450 mln zł,
 # PIT-36L business income 228 957 mln zł; MF "Informacja dotycząca ryczałtu ... za 2021 r." - business revenue
 # 89 466 mln zł converted to income with PIT_LUMP_REVENUE_TO_INCOME (an assumption). See docs/model-parameters.md.
+# PLACEHOLDER-UNVERIFIED (assumption derived from MF 2021 data + the assumed PIT_LUMP_REVENUE_TO_INCOME).
 PIT_BUSINESS_SCALE_SHARE: float = 0.14
+# PLACEHOLDER-UNVERIFIED (as PIT_BUSINESS_SCALE_SHARE; the three shares sum to 1).
 PIT_BUSINESS_FLAT_SHARE: float = 0.72
+# PLACEHOLDER-UNVERIFIED (as PIT_BUSINESS_SCALE_SHARE; the three shares sum to 1).
 PIT_BUSINESS_LUMP_SHARE: float = 0.14
 
 # Ratio of recorded revenue (ryczałt base) to income for lump-sum taxpayers.
-# PLACEHOLDER-UNVERIFIED: illustrative value.
+# PLACEHOLDER-UNVERIFIED: illustrative value, MF does not publish lump-sum costs. See docs/model-parameters.md.
 PIT_LUMP_REVENUE_TO_INCOME: float = 2.0
 
 # Non-agricultural business income (PIT base outside wages) as a ratio to the wage bill.
 # No business-income series is loaded, so the projection ties it to the wage bill.
-# PLACEHOLDER-UNVERIFIED (assumption derived from MF 2021 data + the assumed PIT_LUMP_REVENUE_TO_INCOME).
 # Components (2021): business income as above (317.1 mld zł) / model wage bill 2021 (GUS BDL wage x employment x 12
 # = 783.1 mld zł) = 0.405, rounded to 0.40. See docs/model-parameters.md.
+# PLACEHOLDER-UNVERIFIED (assumption derived from MF 2021 data + the assumed PIT_LUMP_REVENUE_TO_INCOME).
 PIT_BUSINESS_INCOME_TO_WAGE_BILL: float = 0.40
 
 # ---------------------------------------------------------------- second round (macro feedback)
 
 # Marginal propensity to consume out of disposable income: a PIT change of dT (mld zł)
 # moves nominal consumption by -HOUSEHOLD_MPC * dT.
-# PLACEHOLDER-UNVERIFIED: illustrative value, no literature source verified.
+# PLACEHOLDER-UNVERIFIED: illustrative value, no literature source verified. See docs/model-parameters.md.
 HOUSEHOLD_MPC: float = 0.6
 
 # Share of private consumption in GDP: a relative change of real consumption x moves
@@ -100,7 +103,7 @@ HOUSEHOLD_MPC: float = 0.6
 CONSUMPTION_GDP_SHARE: float = 0.57
 
 # Elasticity of employment w.r.t. real GDP (short-run, Okun-type).
-# PLACEHOLDER-UNVERIFIED: illustrative value, no literature source verified.
+# PLACEHOLDER-UNVERIFIED: illustrative value (data check 0.40-0.52, see docs/model-parameters.md).
 EMPLOYMENT_GDP_ELASTICITY: float = 0.5
 
 # Number of most recent years used for the per-tax calibration factors (mean ratio of

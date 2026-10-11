@@ -151,3 +151,12 @@ def test_xlsx_metadata_has_constant_rows(c, result):
     meta = {row[0]: row[1] for row in wb["Metadane"].iter_rows(values_only=True)}
     wb.close()
     assert meta["stala_VAT_GAP"].startswith("ze źródła")
+
+
+def test_legacy_placeholder_status_counts_as_assumption(c, result):
+    rows = [_row("OLD", "PLACEHOLDER-UNVERIFIED"), _row("NEW", "assumption"), _row("SRC", "sourced", source="MF", year=2021)]
+    meta = meta_of(csv_rows(c.post("/export?format=csv", json={"params": {}, "result": {**result, "assumptions": rows}})))
+    assert meta["zalozenia_niezweryfikowane"] == "OLD, NEW"
+    assert meta["zastrzezenie"].startswith(ASSUMPTION_SENTENCE) and "OLD" in meta["zastrzezenie"]
+    assert meta["stala_OLD"].startswith("założenie")
+    assert "PLACEHOLDER" not in meta["zastrzezenie"]

@@ -131,11 +131,13 @@ liczbami: `docs/data-sources-discovery.md`, sekcja „Uruchomienie na żywo 2026
 
 - **Źródła danych są prawdziwe i zweryfikowane na żywo** (2026-10-10: GUS BDL, Eurostat, MF/dane.gov.pl; wartości zgodne z
   nagraniami i opublikowanymi sprawozdaniami). Niezweryfikowany pozostaje **model**:
-  - **13 stałych modelu oznaczonych `PLACEHOLDER-UNVERIFIED`** w `backend/app/model/config.py` (lista także w zakładce
-    „Jakość” i w eksportach): udziały konsumpcji wg stawek VAT, luka VAT, elastyczność cenowa konsumpcji, udział małych
-    podatników CIT, rozkład dochodów PIT, podział dochodów z działalności (skala/liniowy/ryczałt) i relacja przychodu do
-    dochodu ryczałtowców, relacja dochodów z działalności do masy płac, krańcowa skłonność do konsumpcji, udział konsumpcji
-    w PKB, elastyczność zatrudnienia względem PKB. Wymagają weryfikacji przez ekonomistę.
+  - **Rejestr stałych modelu** (`docs/model-parameters.md`, kopia maszynowa `backend/app/model/param_meta.py`, widok w zakładce
+    „Jakość” i w eksportach): 13 stałych ma status **z danych** (1: udział konsumpcji w PKB liczony z serii w bazie),
+    **ze źródła** (2: luka VAT – KE, udział małych podatników CIT – MF) albo **założenie** (10, bez weryfikowalnego źródła;
+    oznaczone `PLACEHOLDER-UNVERIFIED` w `backend/app/model/config.py`). Założenia: udziały konsumpcji wg stawek VAT,
+    elastyczność cenowa konsumpcji, rozkład dochodów PIT, trzy udziały form opodatkowania dochodu z działalności, relacja
+    przychodu do dochodu ryczałtowców, relacja dochodów z działalności do masy płac, krańcowa skłonność do konsumpcji,
+    elastyczność zatrudnienia względem PKB. Każde ma zakres niepewności w rejestrze; wymagają weryfikacji przez ekonomistę.
   - **Rozkład dochodów PIT** jest zastępczy; dane MF („Informacja dotycząca rozliczenia PIT”, dane.gov.pl zbiór 191) są tylko
     w PDF (do 2021 r.). Na danych na żywo rozkład zastępczy daje silną progresję („bracket creep”): elastyczność części skali
     PIT względem bazy ≈ 1,85, mediana PIT 2025 128 mld zł przy 97,6 mld zł wykonania 2024 (szczegóły w raporcie z rozpoznania,

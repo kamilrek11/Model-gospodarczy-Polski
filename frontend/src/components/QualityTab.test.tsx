@@ -93,4 +93,16 @@ describe("QualityTab constant provenance table", () => {
     await screen.findByText("brak");
     expect(screen.queryByRole("note")).toBeNull();
   });
+
+  it("treats a legacy PLACEHOLDER status from cached results as an assumption", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(bt)));
+    const old = [{ key: "OLD", value: 1, status: "PLACEHOLDER-UNVERIFIED", note: "n", source: "", year: null, url: "", low: null, high: null }];
+    const { container } = render(<QualityTab sim={{ ...sim, assumptions: old } as SimulationResult} />);
+    await screen.findByText("brak");
+    const row = screen.getByText("OLD", { selector: "code" }).closest("tr")!;
+    expect(row).toHaveClass("placeholder");
+    expect(row).toHaveTextContent("założenie");
+    expect(screen.getByRole("note")).toHaveTextContent("1 z założeń");
+    expect(container.textContent).not.toMatch(/PLACEHOLDER/);
+  });
 });

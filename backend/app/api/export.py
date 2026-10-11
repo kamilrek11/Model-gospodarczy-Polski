@@ -90,6 +90,8 @@ def meta_rows(result: dict) -> list[list]:
             if not isinstance(a, dict) or not isinstance(a.get("key"), str) or len(a["key"]) > MAX_META_TEXT:
                 raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
             status = a.get("status")
+            if isinstance(status, str) and "PLACEHOLDER" in status:
+                status = "assumption"  # results cached before the status registry
             source, year, url = a.get("source") or "", a.get("year"), a.get("url") or ""
             if not all(isinstance(t, str) and len(t) <= MAX_SOURCE_TEXT for t in (source, url)) or not (year is None or (isinstance(year, int) and not isinstance(year, bool))):
                 raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")

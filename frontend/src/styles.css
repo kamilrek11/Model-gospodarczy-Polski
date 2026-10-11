@@ -150,11 +150,14 @@ button.primary:disabled { opacity: 0.6; cursor: progress; }
 .export-bar .error { flex-basis: 100%; margin: 0; }
 .field { display: flex; flex-direction: column; gap: 0.25rem; }
 .assumption { padding: 0.5rem 0.75rem; border: 1px solid var(--grid); border-radius: 6px; }
+tr.assumption { padding: 0; border: 0; border-radius: 0; }
+tr.assumption.placeholder { border: 0; }
+tr.assumption.placeholder > td { border-top: 1px solid var(--warn-border); border-bottom: 1px solid var(--warn-border); }
 .assumption.placeholder { border-color: var(--warn-border); background: var(--warn-bg); color: var(--warn-fg); }
 .assumption.placeholder small, .assumption.placeholder a { color: var(--warn-fg); }
 .assumptions-table td, .assumptions-table th { vertical-align: top; text-align: left; }
 .assumptions-table .kv-list { margin: 0; }
-.badge { font-size: 0.75rem; padding: 0.1rem 0.4rem; border: 1px solid var(--grid); border-radius: 4px; margin-left: 0.25rem; }
+.badge { font-size: 0.75rem; padding: 0.1rem 0.4rem; border: 1px solid var(--grid); border-radius: 4px; white-space: nowrap; }
 .badge-warn { border-color: var(--warn-border); font-weight: 700; }
 .note-list { font-size: 0.85rem; color: var(--text-secondary); padding-left: 1.25rem; }
 .kv-list { list-style: none; display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; padding: 0; margin: 0.25rem 0; font-variant-numeric: tabular-nums; }

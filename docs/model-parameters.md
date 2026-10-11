@@ -107,6 +107,44 @@ albo zapytanie do MF o dane PIT według decyli (art. 2 ustawy o dostępie do inf
 prognozy PIT niż sam rozkład są: brak emerytur w bazie skali modelu (26% dochodu ze skali w 2021) i okno kalibracji – do
 oceny w osobnym kroku (poza zakresem: nie zmieniamy równań).
 
+## Podsumowanie
+
+**Statusy po badaniu:** z danych 1, ze źródła 2, założenie 10 (z 13 stałych). Stałe z przeglądu, które wcześniej miały
+marker `PLACEHOLDER-UNVERIFIED`, a dziś mają źródło lub dane: `VAT_GAP`, `CIT_SMALL_TAXPAYER_SHARE`,
+`CONSUMPTION_GDP_SHARE`. Marker w `config.py` pozostał tylko przy założeniach (pilnuje tego
+`test_config_marker_only_on_assumptions`).
+
+**2025: mediana przed → po** (mld zł, nagrane dane, parametry domyślne, 2000 ścieżek, ziarno 20261010; baza porównania jak
+w nagłówku dokumentu):
+
+| podatek | przed | po | zmiana |
+|---|---|---|---|
+| VAT | 324,42 | 324,42 | 0,00 |
+| CIT | 72,54 | 72,54 | 0,00 |
+| PIT | 155,50 | 144,87 | −10,63 (−6,8%) |
+
+VAT i CIT bez zmian, bo współczynnik kalibracji pochłania człony mnożnikowe; zmieniają się skutki scenariuszy (np. CIT
+9%→15%: +2,42 → +1,91). Cała zmiana PIT pochodzi z podziału dochodu z działalności (151,53) i relacji dochodów z
+działalności do masy płac (149,35), łącznie 144,87.
+
+**Stałe nadal będące założeniami i rekomendacja**
+
+| stała | rekomendacja |
+|---|---|
+| `PIT_INCOME_DIST_DEFAULT` | Najważniejsza dla PIT. Następny krok: kontrola na sześciu liczbach MF 2021 w testach, potem źródło decylowe (GUS struktura wynagrodzeń + ZUS emerytury albo zapytanie do MF o dane PIT według decyli) – szczegóły w sekcji „Rozkład dochodów PIT”. |
+| `PIT_LUMP_REVENUE_TO_INCOME`, `PIT_BUSINESS_*_SHARE`, `PIT_BUSINESS_INCOME_TO_WAGE_BILL` | Jedno wspólne źródło niepewności (założone R i dane sprzed Polskiego Ładu). Zastąpić po uzyskaniu informacji MF o PIT/ryczałcie za 2022+ (podatki.gov.pl, blokuje pobieranie automatyczne) lub kosztach ryczałtowców. |
+| `VAT_CONSUMPTION_SHARES` | Własna mapa COICOP → stawka VAT na budżetach gospodarstw domowych GUS; ma znaczenie tylko dla skutków zmian stawek. |
+| `VAT_PRICE_ELASTICITY`, `HOUSEHOLD_MPC` | Brak publicznego oszacowania dla Polski; pozostawić z zakresami albo zlecić estymację (NBP/IBS). |
+| `EMPLOYMENT_GDP_ELASTICITY` | Kandydat na „z danych” (MNK 0,40–0,52 zgodne z 0,5); wymaga decyzji, czy zatrudnienie BDL bez małych podmiotów jest akceptowalne. |
+
+**Obserwacje poza zakresem tego zadania (równań nie zmieniano):**
+
+- Emerytury i renty (26,4% dochodu ze skali w 2021) nie wchodzą do bazy skali PIT w modelu; wpływa to na poziom i
+  progresję PIT silniej niż sam kształt rozkładu.
+- Domyślna stawka ryczałtu `pit_lump_rate_default` = 12% (parametr użytkownika) jest wyższa niż efektywna stawka z danych MF
+  2023: 22,10 / 275,55 = 8,0% przychodu.
+- Okno kalibracji PIT i załamanie 2025 (udział budżetu państwa) pozostają otwarte (README, „Znane ograniczenia”).
+
 ## Źródła odwiedzone
 
 - KE, strona VAT gap: https://taxation-customs.ec.europa.eu/taxation/vat/fight-against-vat-fraud/vat-gap_en (raport z 11.12.2025) i tabele xlsx (adres w wierszu `VAT_GAP`) – tab. 7, 9, 10, 205.

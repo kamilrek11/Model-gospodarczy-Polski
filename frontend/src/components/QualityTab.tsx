@@ -6,7 +6,9 @@ import { TAX_LABEL, TAX_ORDER } from "../charts/palette";
 const pctFmt = new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const numFmt = new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 });
 
-export const isPlaceholder = (status: string): boolean => status === "assumption";
+/** Wyniki zapisane przed rejestrem statusów miały status z napisem PLACEHOLDER – traktujemy jak „założenie”. */
+const normalizeStatus = (status: string): string => (status.includes("PLACEHOLDER") ? "assumption" : status);
+export const isPlaceholder = (status: string): boolean => normalizeStatus(status) === "assumption";
 
 const STATUS_LABEL: Record<string, string> = {
   from_data: "z danych",
@@ -15,7 +17,7 @@ const STATUS_LABEL: Record<string, string> = {
   "model-structure": "struktura modelu",
   calibrated: "kalibracja",
 };
-export const statusLabel = (status: string): string => STATUS_LABEL[status] ?? status;
+export const statusLabel = (status: string): string => STATUS_LABEL[normalizeStatus(status)] ?? status;
 
 /** Tylko http(s): adres ze źródła zewnętrznego nie może być linkiem javascript: ani data:. */
 const isHttpUrl = (u: string | undefined): u is string => {
