@@ -67,7 +67,8 @@ PIT_INCOME_DIST_DEFAULT: tuple[tuple[float, float], ...] = (
 # Split of non-agricultural business income by taxation form (shares sum to 1).
 # scale -> taxed on the scale together with wages, flat -> pit_flat_rate,
 # lump -> pit_lump_rate_default applied to revenue (see PIT_LUMP_REVENUE_TO_INCOME).
-# Source (2021): MF "Informacja dotycząca rozliczenia PIT za 2021 r." - business income on the scale 43 450 mln zł,
+# PLACEHOLDER-UNVERIFIED (assumption derived from MF 2021 data + the assumed PIT_LUMP_REVENUE_TO_INCOME).
+# Components (2021): MF "Informacja dotycząca rozliczenia PIT za 2021 r." - business income on the scale 43 450 mln zł,
 # PIT-36L business income 228 957 mln zł; MF "Informacja dotycząca ryczałtu ... za 2021 r." - business revenue
 # 89 466 mln zł converted to income with PIT_LUMP_REVENUE_TO_INCOME (an assumption). See docs/model-parameters.md.
 PIT_BUSINESS_SCALE_SHARE: float = 0.14
@@ -80,8 +81,9 @@ PIT_LUMP_REVENUE_TO_INCOME: float = 2.0
 
 # Non-agricultural business income (PIT base outside wages) as a ratio to the wage bill.
 # No business-income series is loaded, so the projection ties it to the wage bill.
-# Source (2021): business income as above (317.1 mld zł) / model wage bill 2021 (GUS BDL wage x employment x 12
-# = 783.1 mld zł). See docs/model-parameters.md.
+# PLACEHOLDER-UNVERIFIED (assumption derived from MF 2021 data + the assumed PIT_LUMP_REVENUE_TO_INCOME).
+# Components (2021): business income as above (317.1 mld zł) / model wage bill 2021 (GUS BDL wage x employment x 12
+# = 783.1 mld zł) = 0.405, rounded to 0.40. See docs/model-parameters.md.
 PIT_BUSINESS_INCOME_TO_WAGE_BILL: float = 0.40
 
 # ---------------------------------------------------------------- second round (macro feedback)

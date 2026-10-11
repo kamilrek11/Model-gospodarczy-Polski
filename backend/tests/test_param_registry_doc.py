@@ -1,5 +1,6 @@
 """The human-readable parameter register (docs/model-parameters.md) must agree with param_meta.PARAMETERS."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,20 @@ PRE_VALUES = {
     "CONSUMPTION_GDP_SHARE": 0.57,
     "EMPLOYMENT_GDP_ELASTICITY": 0.5,
 }
+
+
+NUM = r"[−-]?\d+(?:,\d+)?"
+
+
+def _num(text: str) -> float:
+    """Polish number ('−0,5', '520 000', '0,109') -> float."""
+    return float(text.replace(" ", "").replace("−", "-").replace(",", "."))
+
+
+def _first_number(cell: str) -> float:
+    m = re.search(NUM, cell)
+    assert m, cell
+    return _num(m[0])
 
 
 def _cells(line: str) -> list[str]:
@@ -73,17 +88,47 @@ def test_registry_status_matches_code(registry):
         assert registry[key]["Status"] == LABELS[meta.status], key
 
 
-def test_sourced_entries_have_source_year_and_url(registry):
+def test_source_cell_carries_year_and_url(registry):
+    """Year as '(YYYY, ' (data year followed by the address), url verbatim; sourced needs all three fields."""
     for key, meta in PARAMETERS.items():
+        cell = registry[key]["Źródło (rok, adres)"]
         if meta.status == "sourced":
             assert meta.source.strip() and meta.year and meta.url.startswith("http"), key
-            cell = registry[key]["Źródło (rok, adres)"]
-            assert str(meta.year) in cell and meta.url in cell, key
         if meta.status == "from_data":
-            assert meta.source.strip(), key
-            assert registry[key]["Źródło (rok, adres)"], key
-        if meta.status != "assumption":
-            assert registry[key]["Zakres"], key
+            # computed from stored series: source names the series and the rule, year = last observation,
+            # url = the source series (there is no publication of the constant itself)
+            assert meta.source.strip() and meta.year and meta.url.startswith("http"), key
+            assert "ostatni wspólny rok" in meta.source, key
+        if meta.year is not None:
+            assert f"({meta.year}, " in cell, f"{key}: '({meta.year}, ' missing in source cell"
+        if meta.url:
+            assert meta.url in cell, f"{key}: url missing in source cell"
+
+
+def test_value_column_matches_config(registry):
+    for key in PARAMETERS:
+        value = getattr(config, key)
+        cell = registry[key]["Wartość"]
+        if isinstance(value, dict):
+            pairs = dict(re.findall(r"(\w+)\s+([−-]?\d+(?:,\d+)?)", cell))
+            assert {k: _num(v) for k, v in pairs.items()} == value, key
+        elif isinstance(value, tuple):
+            m = re.match(r"(\d+) grup.*od \(([\d ]+); ([\d,]+)\) do \(([\d ]+); ([\d,]+)\)", cell)
+            assert m, key
+            assert int(m[1]) == len(value), key
+            assert (_num(m[2]), _num(m[3])) == tuple(value[0]), key
+            assert (_num(m[4]), _num(m[5])) == tuple(value[-1]), key
+        else:
+            assert _first_number(cell) == value, f"{key}: register {cell!r} vs config {value}"
+
+
+def test_range_column_matches_meta(registry):
+    for key, meta in PARAMETERS.items():
+        cell = registry[key]["Zakres"]
+        if meta.low is not None or meta.high is not None:
+            m = re.match(rf"({NUM})–({NUM})", cell)
+            assert m, f"{key}: Zakres must start with 'low–high': {cell!r}"
+            assert (_num(m[1]), _num(m[2])) == (meta.low, meta.high), key
 
 
 def test_assumptions_explain_missing_source(registry):

@@ -42,7 +42,11 @@ _SPLIT_SOURCE = (
     "228 957 mln zł) oraz Informacja dotycząca ryczałtu od przychodów ewidencjonowanych za 2021 r. (przychód z "
     f"działalności 89 466 mln zł), dane.gov.pl: {URL_LUMP_2021}"
 )
-_SPLIT_NOTE = (
+_DERIVED = (
+    "Założenie pochodne z MF 2021 + założone R: składniki z MF są źródłowe, ale część ryczałtowa wymaga założonego "
+    "PIT_LUMP_REVENUE_TO_INCOME (R = 2,0; MF nie publikuje dochodu ryczałtowców), a dane są sprzed Polskiego Ładu. "
+)
+_SPLIT_NOTE = _DERIVED + (
     "Podział dochodu z pozarolniczej działalności według formy opodatkowania (trzy udziały sumują się do 1): skala "
     "(razem z wynagrodzeniami), liniowy (pit_flat_rate), ryczałt (pit_lump_rate_default od przychodu). 2021: skala "
     "43,45, liniowy 228,96 mld zł; dochód ryczałtowców = przychód 89,47 mld zł / PIT_LUMP_REVENUE_TO_INCOME (2,0 – "
@@ -92,7 +96,8 @@ PARAMETERS: dict[str, ParamMeta] = {
             low=0.05,
             high=0.12,
             note="Udział podstawy CIT opodatkowanej stawką 9% (mali podatnicy). 2021: podatek 9% 2 700 278 tys. zł, "
-            "19% 65 220 084 tys. zł -> podstawy 30,0 i 343,3 mld zł -> 8,0%. 2019: 5,3%, 2020: 5,8% (rosnący trend). "
+            "19% 65 220 084 tys. zł -> podstawy 30,0 i 343,3 mld zł -> 8,0% (podstawa = podatek / stawka; pominięto IP Box: "
+            "podstawa ok. 1,5 mld zł, bez wpływu na 8,0%). 2019: 5,3%, 2020: 5,8% (rosnący trend). "
             "Informacje za 2022+ są tylko na podatki.gov.pl (strona blokuje pobieranie automatyczne).",
         ),
         _a(
@@ -104,9 +109,9 @@ PARAMETERS: dict[str, ParamMeta] = {
             "zgodny z udziałem podatników powyżej progu (7,2% vs 7,3% po indeksacji płacą). Patrz sekcja "
             "„Rozkład dochodów PIT” w docs/model-parameters.md.",
         ),
-        ParamMeta(key="PIT_BUSINESS_SCALE_SHARE", status="sourced", source=_SPLIT_SOURCE, year=2021, url=URL_PIT_2021, low=0.10, high=0.15, note=_SPLIT_NOTE),
-        ParamMeta(key="PIT_BUSINESS_FLAT_SHARE", status="sourced", source=_SPLIT_SOURCE, year=2021, url=URL_PIT_2021, low=0.52, high=0.78, note=_SPLIT_NOTE),
-        ParamMeta(key="PIT_BUSINESS_LUMP_SHARE", status="sourced", source=_SPLIT_SOURCE, year=2021, url=URL_PIT_2021, low=0.07, high=0.37, note=_SPLIT_NOTE),
+        ParamMeta(key="PIT_BUSINESS_SCALE_SHARE", status="assumption", source=_SPLIT_SOURCE, year=2021, url=URL_PIT_2021, low=0.10, high=0.15, note=_SPLIT_NOTE),
+        ParamMeta(key="PIT_BUSINESS_FLAT_SHARE", status="assumption", source=_SPLIT_SOURCE, year=2021, url=URL_PIT_2021, low=0.52, high=0.78, note=_SPLIT_NOTE),
+        ParamMeta(key="PIT_BUSINESS_LUMP_SHARE", status="assumption", source=_SPLIT_SOURCE, year=2021, url=URL_PIT_2021, low=0.07, high=0.37, note=_SPLIT_NOTE),
         _a(
             "PIT_LUMP_REVENUE_TO_INCOME",
             "Relacja przychodu (podstawa ryczałtu) do dochodu ryczałtowców. Założenie: ryczałtowcy nie wykazują kosztów, "
@@ -118,16 +123,15 @@ PARAMETERS: dict[str, ParamMeta] = {
         ),
         ParamMeta(
             key="PIT_BUSINESS_INCOME_TO_WAGE_BILL",
-            status="sourced",
+            status="assumption",
             source="MF, Informacja PIT za 2021 r. i Informacja o ryczałcie za 2021 r. (dane.gov.pl, zbiory 191 i 206); "
             "masa płac modelu z GUS BDL (zmienna 64428 × zatrudnienie × 12)",
             year=2021,
             url=URL_PIT_2021,
             low=0.37,
             high=0.55,
-            note="Dochód z pozarolniczej działalności (skala 43,45 + liniowy 228,96 + ryczałt 89,47/2,0 = 317,1 mld zł) "
-            "do masy płac w definicji modelu (2021: 783,1 mld zł) = 0,405. Zależy od założonego "
-            "PIT_LUMP_REVENUE_TO_INCOME; po 2022 r. udział ryczałtu wzrósł, stąd górna granica zakresu. Serii dochodu "
+            note=_DERIVED + "Dochód z pozarolniczej działalności (skala 43,45 + liniowy 228,96 + ryczałt 89,47/2,0 = 317,1 mld zł) "
+            "do masy płac w definicji modelu (2021: 783,1 mld zł) = 0,405, zaokrąglone do 0,40. Po 2022 r. udział ryczałtu wzrósł, stąd górna granica zakresu. Serii dochodu "
             "z działalności nie ma w bazie, więc stała nie może mieć statusu „z danych”.",
         ),
         _a(
