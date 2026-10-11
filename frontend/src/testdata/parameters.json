@@ -1,0 +1,134 @@
+[
+  {
+    "key": "pit_rate_low",
+    "label": "PIT - stawka niższa",
+    "tax": "pit",
+    "unit": "ułamek",
+    "default": 0.12,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "description": "Stawka PIT na skali podatkowej do progu."
+  },
+  {
+    "key": "pit_rate_high",
+    "label": "PIT - stawka wyższa",
+    "tax": "pit",
+    "unit": "ułamek",
+    "default": 0.32,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "description": "Stawka PIT na skali podatkowej powyżej progu."
+  },
+  {
+    "key": "pit_threshold",
+    "label": "PIT - próg podatkowy",
+    "tax": "pit",
+    "unit": "zł",
+    "default": 120000,
+    "min": 0.0,
+    "max": 1000000,
+    "step": 1000.0,
+    "description": "Dochód roczny, powyżej którego obowiązuje stawka wyższa."
+  },
+  {
+    "key": "pit_tax_free",
+    "label": "PIT - kwota wolna",
+    "tax": "pit",
+    "unit": "zł",
+    "default": 30000,
+    "min": 0.0,
+    "max": 200000,
+    "step": 1000.0,
+    "description": "Roczna kwota wolna od podatku."
+  },
+  {
+    "key": "pit_flat_rate",
+    "label": "PIT - podatek liniowy",
+    "tax": "pit",
+    "unit": "ułamek",
+    "default": 0.19,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "description": "Stawka podatku liniowego."
+  },
+  {
+    "key": "pit_lump_rate_default",
+    "label": "PIT - ryczałt (stawka domyślna)",
+    "tax": "pit",
+    "unit": "ułamek",
+    "default": 0.12,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "description": "Domyślna stawka ryczałtu od przychodów ewidencjonowanych."
+  },
+  {
+    "key": "pit_state_share_mult",
+    "label": "PIT - udział budżetu państwa (mnożnik względem 2025)",
+    "tax": "pit",
+    "unit": "mnożnik",
+    "default": 1.0,
+    "min": 0.5,
+    "max": 2.0,
+    "step": 0.05,
+    "description": "Mnożnik udziału budżetu państwa w PIT względem 2025 r. (1 = udział z 2025 r.); udział oszacowany z jednego roku. Bez wykonania za 2025 r. mnożnik skaluje PIT liczony według zasad sprzed reformy (zob. Jakość modelu)."
+  },
+  {
+    "key": "vat_rate_standard",
+    "label": "VAT - stawka podstawowa",
+    "tax": "vat",
+    "unit": "ułamek",
+    "default": 0.23,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "description": "Podstawowa stawka VAT."
+  },
+  {
+    "key": "vat_rate_reduced1",
+    "label": "VAT - stawka obniżona I",
+    "tax": "vat",
+    "unit": "ułamek",
+    "default": 0.08,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "description": "Pierwsza obniżona stawka VAT."
+  },
+  {
+    "key": "vat_rate_reduced2",
+    "label": "VAT - stawka obniżona II",
+    "tax": "vat",
+    "unit": "ułamek",
+    "default": 0.05,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "description": "Druga obniżona stawka VAT."
+  },
+  {
+    "key": "cit_rate",
+    "label": "CIT - stawka podstawowa",
+    "tax": "cit",
+    "unit": "ułamek",
+    "default": 0.19,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "description": "Podstawowa stawka CIT."
+  },
+  {
+    "key": "cit_rate_small",
+    "label": "CIT - stawka dla małych podatników",
+    "tax": "cit",
+    "unit": "ułamek",
+    "default": 0.09,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "description": "Preferencyjna stawka CIT dla małych podatników."
+  }
+]

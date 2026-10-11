@@ -1,0 +1,30 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      BUDGET_DB_PATH: /data/budget.db
+      BUDGET_CACHE_DIR: /data/cache
+      # POST /api/refresh has no authentication and nginx exposes it: set REFRESH_DISABLED=1 for any exposed instance
+      REFRESH_DISABLED: "${REFRESH_DISABLED:-0}"
+    volumes:
+      - budget-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    # no ports: reachable only from the frontend container
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  budget-data:

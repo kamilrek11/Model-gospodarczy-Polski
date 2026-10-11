@@ -1,0 +1,176 @@
+# Symulator wpływów budżetowych (PIT / CIT / VAT)
+
+Symulator wpływów z podatków PIT, CIT i VAT w budżecie państwa: blok makro (VAR), moduły podatkowe, symulacja Monte Carlo
+z pasmami niepewności, scenariusze, eksport. Projekt: `docs/superpowers/specs/2026-10-10-symulator-budzetu-design.md`.
+
+## Uruchomienie
+
+### Docker Compose
+
+```bash
+docker compose up -d --build     # frontend: http://localhost:8080 (jedyny opublikowany port)
+```
+
+Backend nie jest wystawiony na zewnątrz; nginx we frontendzie proxuje `/api/*` do `backend:8000` (bez prefiksu `/api`).
+Baza SQLite leży w nazwanym wolumenie `budget-data` (`/data/budget.db`). Healthcheck backendu: `GET /health`.
+
+> **Uwaga – `POST /api/refresh` działa bez uwierzytelniania**, a nginx wystawia go razem z resztą `/api` na porcie 8080.
+> Każdy, kto ma dostęp do frontendu, może wielokrotnie uruchamiać odświeżanie (zapytania do BDL – limit anonimowy
+> 1000 / 12 h – i do ok. 210 MB pobrań z dane.gov.pl przy pustym cache). Ostatni dobry stan danych jest chroniony, ale dla
+> każdej instancji dostępnej spoza zaufanej sieci ustaw `REFRESH_DISABLED=1` (Compose przekazuje zmienną do backendu,
+> domyślnie `0` = odświeżanie włączone):
+>
+> ```bash
+> REFRESH_DISABLED=1 docker compose up -d --build
+> ```
+
+> Stan weryfikacji: w środowisku, w którym powstał kod, nie działał demon Dockera, więc lokalnie sprawdzono tylko
+> `docker compose config`. Build obrazów, `docker compose up --wait`, `nginx -t` i test dymny (SPA oraz proxy `/api`)
+> uruchamia i przechodzi workflow CI (zadanie „Docker" w `.github/workflows/ci.yml`) na runnerze GitHub Actions.
+
+### Szybki podgląd na prawdziwych danych (demo)
+
+```bash
+bash scripts/demo-real-data.sh      # lokalnie albo w GitHub Codespaces; http://localhost:5173
+```
+
+Wymaga wolnych portów 8000 (API) i 5173 (aplikacja); gdy któryś jest zajęty, skrypt przerywa z komunikatem (zmiana: `API_PORT=8010 WEB_PORT=5174 bash scripts/demo-real-data.sh`). Jeśli widzisz "Brak danych źródłowych", frontend rozmawia z innym, pustym backendem – zatrzymaj go i uruchom skrypt ponownie.
+
+Skrypt uruchamia backend i frontend na zatwierdzonej migawce prawdziwych danych `demo/real-data.db`
+(GUS BDL, Eurostat, MF; stan z 2026-10-11, `synthetic=0`, raport: `docs/data-sources-discovery.md`). Odświeżanie jest wyłączone.
+
+### Lokalnie (dev)
+
+```bash
+# backend
+cd backend && python -m venv .venv
+# zależności przypięte w pyproject.toml (projekt nie jest instalowalnym pakietem): runtime + grupa dev (pytest)
+.venv/bin/pip install $(.venv/bin/python -c "import tomllib;p=tomllib.load(open('pyproject.toml','rb'))['project'];print(' '.join(p['dependencies']+p['optional-dependencies']['dev']))")
+.venv/bin/python -m uvicorn app.main:app --port 8000      # baza: $BUDGET_DB_PATH (domyślnie backend/var/budget.db)
+# frontend (proxy /api -> localhost:8000)
+cd frontend && npm ci && npm run dev
+```
+
+Testy: `cd backend && .venv/bin/python -m pytest`, `cd frontend && npx vitest run && npx tsc --noEmit`.
+
+Zmienne środowiskowe i źródła danych: sekcja [Prawdziwe dane](#prawdziwe-dane).
+
+### Dane syntetyczne (fixtures) - OSTRZEŻENIE
+
+Do uruchomienia aplikacji bez sieci (demo, testy e2e) można zasiać bazę danymi syntetycznymi:
+
+```bash
+cd backend && SEED_FIXTURES=1 .venv/bin/python -m scripts.seed_fixtures --db /sciezka/do/demo.db
+BUDGET_DB_PATH=/sciezka/do/demo.db .venv/bin/python -m uvicorn app.main:app
+```
+
+**Dane z tego skryptu są SYNTETYCZNE (wymyślone, deterministyczne) i nie mogą być nigdy przedstawiane jako prawdziwe dane
+GUS/MF/ZUS/Eurostat.** Skrypt odmawia działania bez `SEED_FIXTURES=1` i bez jawnego `--db`, a także gdy rozwiązana ścieżka (realpath) wskazuje
+domyślną bazę aplikacji lub `$BUDGET_DB_PATH`, albo gdy plik już istnieje i nie jest oznaczony jako syntetyczny
+(`meta.synthetic = "1"`); zapisuje w bazie `meta.synthetic = "1"` i wypisuje ostrzeżenie.
+API (`/simulate`, `/history`, `/refresh/status`) zwraca `synthetic: true`, a interfejs pokazuje wtedy stały baner
+„DANE SYNTETYCZNE – nie są to dane GUS/MF"; znacznik trafia też do eksportów (CSV/XLSX: blok/arkusz „Metadane", PNG: stopka,
+PDF: notka). Udane odświeżenie z prawdziwych źródeł zapisuje `meta.synthetic = "0"` w tej samej transakcji co dane.
+
+### Testy end-to-end (Playwright)
+
+```bash
+cd e2e && npm ci && npm test      # buduje frontend, startuje 2 backendy (zasiane / puste) i 2 serwery podglądu
+```
+
+Testy uruchamiają backend na tymczasowej bazie z danymi syntetycznymi oraz drugi, z pustą bazą (stan pusty); oba z
+`REFRESH_DISABLED=1` (bez ruchu sieciowego do źródeł danych). Jeśli przeglądarka
+Playwrighta nie jest pobrana, wskaż Chromium: `PW_CHROMIUM_PATH=/ścieżka/do/chrome npm test`.
+
+## Prawdziwe dane
+
+`POST /refresh` (przycisk „Odśwież dane”) pobiera prawdziwe dane publiczne, sprawdza je bramkami jakości i dopiero wtedy
+zapisuje je w bazie (jedna transakcja, `meta.synthetic = "0"`); błąd źródła lub naruszenie bramki nie nadpisuje ostatniego
+dobrego stanu. Źródła (szczegóły, identyfikatory i pułapki: `docs/data-sources-discovery.md`):
+
+| seria | źródło | jednostka w bazie |
+|---|---|---|
+| `pkb_real` | GUS BDL 458431 (dynamika PKB, r/r) łańcuchowana do nominalnego PKB 458271 w ostatnim ostatecznym roku | mld zł (ceny stałe roku bazowego) |
+| `gdp_nominal` (pomocnicza, kontrola jednostek) | GUS BDL 458271 | mld zł |
+| `employment` | GUS BDL 154173 (przeciętne zatrudnienie, etaty) | etaty |
+| `wage_nominal` | GUS BDL 64428 (przeciętne miesięczne wynagrodzenie brutto) | zł/mies. |
+| `cpi` | GUS BDL 217230 (CPI r/r) łańcuchowany, 100 = rok przed pierwszym | indeks |
+| `consumption_nominal` | Eurostat `nama_10_gdp` P31_S14, `CP_MNAC` (nie ma jej w BDL) | mld zł |
+| `gross_surplus` | GUS BDL 458419, lata po ostatnim roku BDL z Eurostatu `nama_10_gdp` B2A3G | mld zł |
+| `rev_vat`, `rev_cit`, `rev_pit` | MF, sprawozdania z wykonania budżetu państwa (dane.gov.pl, zbiór 163), plik 007, kolumna „Wykonanie” – kasowo, budżet państwa | mld zł |
+
+Bramki jakości (`backend/app/data/dataset.py`): ≥ 15 ciągłych wspólnych lat zmiennych makro; konsumpcja / PKB nominalny
+w [0,4; 0,7] (wyłapuje błąd mln/mld); ostatnie wpływy VAT/CIT/PIT w wiarygodnych przedziałach; nadwyżka operacyjna GUS i
+Eurostatu zgodna co do 2% w latach wspólnych, seria GUS BDL obecna, a dołączone lata Eurostatu bez luki; brak NaN i wartości ujemnych; serie wpływów nie kończą się wcześniej niż
+już zapisane (poza danymi syntetycznymi).
+
+Zmienne środowiskowe backendu:
+
+- `BDL_CLIENT_ID` – opcjonalny klucz API GUS BDL (nagłówek `X-ClientId`, wyższy limit niż anonimowe 1000 zapytań / 12 h;
+  jedno odświeżenie to 6 zapytań do BDL).
+- `BUDGET_CACHE_DIR` – katalog cache sprawozdań MF (tylko odczytane wartości per rok jako JSON, bez archiwów ZIP); domyślnie
+  `<katalog bazy>/cache`, pusta wartość wyłącza cache. W Docker Compose: `/data/cache` w wolumenie.
+- `REFRESH_DISABLED=1` (także `true`/`yes`, bez względu na wielkość liter) – wyłącza odświeżanie (`POST /refresh` → 403
+  „odświeżanie wyłączone w tej instancji”, `/refresh/status` zwraca `disabled: true`); używane przez testy e2e, które nie
+  łączą się z prawdziwymi źródłami, i zalecane dla każdej wystawionej instancji (endpoint nie ma uwierzytelniania).
+
+**Pierwsze odświeżenie pobiera ok. 210 MB** (10 rocznych archiwów ZIP MF 2016–2025, w większości PDF-y dołączone przez MF;
+trwało ok. 6,5 min) – kolejne korzystają z cache i robią tylko 8 zapytań do BDL/Eurostatu plus listę zasobów dane.gov.pl.
+Ostrzeżenia źródeł (np. nieobsługiwany rok 2015 MF) są widoczne w `/refresh/status` i w interfejsie, ale nie przerywają odświeżenia.
+Natomiast rok MF od 2016 r., którego nie udało się pobrać (błąd sieci, przekroczony czas, 5xx, limit rozmiaru) i którego
+nie ma w cache, jest błędem źródła: odświeżenie kończy się stanem `failed`, a zapisane dane pozostają bez zmian.
+
+Dowód na żywo (wymaga sieci; nie dotyka bazy aplikacji):
+
+```bash
+cd backend
+# raport: prawdziwe odświeżenie do NOWEJ bazy, symulacja z parametrami domyślnymi, backtest; kod wyjścia 0 = bramki przeszły
+.venv/bin/python -m scripts.live_refresh_report --db /tmp/live.db [--cache-dir /tmp/mf-cache]
+# testy dymne na żywo (małe zapytania: PKB 2024 z BDL, konsumpcja 2024 z Eurostatu, VAT 2024 z MF – jeden rok)
+RUN_LIVE=1 .venv/bin/python -m pytest -m live -q
+```
+
+Skrypt odmawia pracy, gdy `--db` wskazuje istniejący plik albo bazę aplikacji (domyślną lub `$BUDGET_DB_PATH`), oraz gdy
+cache MF byłby katalogiem cache aplikacji. Domyślny cache to `<katalog bazy>/<nazwa bazy>-cache` (np. `/tmp/live-cache`).
+Po nieudanym odświeżeniu (kod 1) skrypt usuwa utworzony przez siebie plik bazy, więc można go od razu uruchomić ponownie.
+Testy `live` są pomijane (skip), dopóki nie ustawiono `RUN_LIVE=1` (`backend/tests/conftest.py`) – niezależnie od wyrażenia
+`-m`, więc np. `pytest -m "not slow"` nie łączy się z siecią; w CI uruchamia je osobne zadanie
+`live-sources`, dostępne wyłącznie ręcznie (`workflow_dispatch`). Wynik pierwszego uruchomienia na żywo (2026-10-10) z
+liczbami: `docs/data-sources-discovery.md`, sekcja „Uruchomienie na żywo 2026-10-10”.
+
+## Znane ograniczenia i otwarte kwestie
+
+- **Źródła danych są prawdziwe i zweryfikowane na żywo** (2026-10-10: GUS BDL, Eurostat, MF/dane.gov.pl; wartości zgodne z
+  nagraniami i opublikowanymi sprawozdaniami). Niezweryfikowany pozostaje **model**:
+  - **Rejestr stałych modelu** (`docs/model-parameters.md`, kopia maszynowa `backend/app/model/param_meta.py`, widok w zakładce
+    „Jakość” i w eksportach): 14 stałych ma status **z danych** (1: udział konsumpcji w PKB liczony z serii w bazie),
+    **ze źródła** (2: luka VAT – KE, udział małych podatników CIT – MF) albo **założenie** (11, bez weryfikowalnego źródła;
+    oznaczone `PLACEHOLDER-UNVERIFIED` w `backend/app/model/config.py`). Założenia: udziały konsumpcji wg stawek VAT,
+    elastyczność cenowa konsumpcji, rozkład dochodów PIT, trzy udziały form opodatkowania dochodu z działalności, relacja
+    przychodu do dochodu ryczałtowców, relacja dochodów z działalności do masy płac, krańcowa skłonność do konsumpcji,
+    elastyczność zatrudnienia względem PKB, rozrzut udziału budżetu państwa w PIT. Każde ma zakres niepewności w rejestrze; wymagają weryfikacji przez ekonomistę.
+  - **Rozkład dochodów PIT** jest zastępczy; dane MF („Informacja dotycząca rozliczenia PIT”, dane.gov.pl zbiór 191) są tylko
+    w PDF (do 2021 r.). Na danych na żywo rozkład zastępczy daje silną progresję („bracket creep”): elastyczność części skali
+    PIT względem bazy ≈ 1,85, wynik modułu PIT 2025 przed udziałem budżetu państwa 128 mld zł (po udziale ok. 29 mld zł) przy 97,6 mld zł wykonania 2024 (szczegóły w raporcie z rozpoznania,
+    „Wiarygodność prognozy – obserwacje”). Prognozy PIT traktować jako ilustracyjne.
+  - Mediany VAR dla 2025 są wyraźnie powyżej wykonania (płace, CPI, konsumpcja) – szok 2022–2024 w krótkiej próbie;
+    backtest (MAPE VAT ~10%, CIT ~28%, PIT ~14%, pokrycie pasm 80% poniżej nominalnego) pokazuje za wąskie pasma.
+- **Udział budżetu państwa w PIT od 2025 r.** (reforma finansowania JST; 97,6 → 28,75 mld zł): wynik modułu PIT jest od 2025 r.
+  mnożony przez udział s = s₀ · m · ε. s₀ jest kalibrowany na wykonaniu z jednego roku (2025), zależy od okna kalibracji PIT (0,232 na migawce demo i danych na żywo, 0,198 / 0,212 na nagranym zestawie testowym) i zawiera błąd
+  prognozy modułu na ten rok (nie jest „czystym udziałem ustawowym”), m to suwak użytkownika (`pit_state_share_mult`),
+  a ε rozprasza udział (σ = 0,2, założenie). Kalibracja modułu i backtest PIT nadal używają tylko lat do 2024. Szczegóły i
+  porównanie przed → po: `docs/model-parameters.md`, sekcja „Udział budżetu państwa w PIT”.
+- **MF 2015 nieobsługiwany**: sprawozdanie za 2015 ma plik 007 w starym formacie `.xls` (dodatkowo podwójnie zagnieżdżony),
+  bez `xlrd` – rok jest pomijany z ostrzeżeniem. Wpływy dostępne od 2016 r.; lat sprzed 2015 nie ma na dane.gov.pl.
+- **Kasowo vs memoriałowo**: wpływy MF to kasowe wykonanie budżetu państwa (udział budżetu państwa, bez udziałów JST);
+  dane makro (Eurostat, rachunki narodowe) są memoriałowe. Porównania z ESA (np. Eurostat `gov_10a_taxag`) dają ten sam rząd
+  wielkości, ale nie identyczne liczby.
+- Kalibracja VAT i CIT może obejmować rok po ostatnim roku modelu makro (konsumpcja i nadwyżka z Eurostatu są o rok dłuższe
+  niż PKB realny i zatrudnienie z BDL), więc porównanie prognozy tego roku z wykonaniem nie jest testem poza próbą.
+- Pojęcia serii: zatrudnienie i płaca z BDL nie obejmują małych podmiotów (płaca wyższa od średniej „w gospodarce
+  narodowej”); od 2026 r. GUS publikuje CPI w klasyfikacji COICOP 2018 (seria roczna 217230 kończy się na 2025 r.).
+- **ZUS / składki nie są objęte** (brak maszynowo czytelnego źródła; wariant: Eurostat `gov_10a_taxag` D61).
+- Otwarte kwestie ze specyfikacji (§8): definicja „budżet państwa” vs sektor finansów publicznych, okres kalibracji, finalny
+  zestaw zmiennych makro i elastyczności (do ustalenia z analitykiem ekonomicznym), docelowy hosting (projekt jest kontenerowy).
+- Dane syntetyczne (`scripts.seed_fixtures`) nadal są dostępne do demo i testów e2e; są zawsze oznaczone (`synthetic: true`,
+  baner, eksporty) i zastępowane przy pierwszym udanym odświeżeniu z prawdziwych źródeł.
