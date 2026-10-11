@@ -44,7 +44,8 @@ State-budget PIT share (spec 2026-10-11-udzial-pit-design.md)
     From the rev_pit break year b (2025 reform of local-government financing) the reported PIT is
         PIT_state = PIT (current law, pre-reform calibration) * s0 * m * eps
     s0 = rev_pit[b] / PIT module output for b (estimate_state_share: from the stored wage bill of b when
-    available, else the median baseline forecast for b); m = pit_state_share_mult (the baseline uses m = 1);
+    available, else the median baseline forecast for b from a fixed-seed run of _SHARE_PATHS paths, so s0 does
+    not depend on the caller's seed or n_paths); m = pit_state_share_mult (the baseline uses m = 1);
     eps = exp(PIT_STATE_SHARE_SIGMA * z), z ~ N(0, 1) per path from a separate generator, the same eps for the
     baseline and the scenario. The share only scales the REPORTED PIT after _scenario: the disposable-income
     channel and the second round still use total PIT. Without rev_pit[b] (or a module value for b): s0 = 1,
@@ -352,6 +353,33 @@ def estimate_state_share(
     return StateShare(float(s0), int(b), source, note)
 
 
+# The 'forecast' source of s0 uses its own fixed Monte Carlo run, so s0 does not depend on the
+# caller's seed (incl. the API default None) or n_paths. Method choice, not a data value.
+_SHARE_SEED: int = 2025
+_SHARE_PATHS: int = 2000
+
+
+def _share_pit_base(model: MacroModel, history: dict[str, pd.DataFrame], ctx: _Context, years: list[int], law: dict) -> np.ndarray:
+    """Baseline PIT paths (_SHARE_PATHS, len(years)) from a fixed-seed run, only when s0 needs the forecast.
+
+    Empty (0, len(years)) when the break year is not in `years`, PIT is disabled, or the stored wage bill of the
+    break year is available (the 'data' source does not use the forecast).
+    """
+    b = config.STRUCTURAL_BREAKS.get("rev_pit")
+    empty = np.empty((0, len(years)))
+    if b is None or b not in years or "pit" not in ctx.enabled:
+        return empty
+    if b in _series(history, "wage_nominal").index and b in _series(history, "employment").index:
+        return empty
+    k = years.index(b) + 1  # only the years up to the break are needed
+    lv = simulate_levels(model, k, _SHARE_PATHS, np.random.default_rng(_SHARE_SEED))
+    first = _pit(lv["wage_nominal"] * lv["employment"], ctx.dist, law, ctx.calib["pit"])
+    pit = _scenario(lv, law, law, ctx, first)[0]["pit"]
+    out = np.full((_SHARE_PATHS, len(years)), np.nan)
+    out[:, :k] = pit
+    return out
+
+
 def _state_share_row(share: StateShare, m: float) -> dict:
     sigma = float(config.PIT_STATE_SHARE_SIGMA)
     if share.source == "none":
@@ -468,7 +496,7 @@ def simulate(
 
     # state-budget PIT share: only the reported PIT, after the feedback channels (see module docstring)
     years = list(range(model.last_year + 1, model.last_year + 1 + horizon))
-    share = estimate_state_share(model, history, ctx, years, base_taxes.get("pit", np.empty((0, horizon))))
+    share = estimate_state_share(model, history, ctx, years, _share_pit_base(model, history, ctx, years, law))
     if "pit" in taxes and share.year is not None:
         after = (np.array(years) >= share.year)[None, :]
         eps = 1.0

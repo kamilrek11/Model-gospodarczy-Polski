@@ -42,27 +42,40 @@ def _idx(res, year):
     return res.years.index(year)
 
 
-def test_s0_from_recorded_data_is_about_0_23(real):
+def test_s0_on_recorded_data_forecast_and_data_sources(real):
     from tests.test_simulate import real_history_with_2025_bases
 
-    # recorded series with the 2025 wage bill available (employment carried to 2025): 'data' source, s0 = 0.212
-    model, hist = real_history_with_2025_bases()
-    res = simulate(model, hist, {}, horizon=2, n_paths=2000, seed=0)
-    row = _row(res)
-    assert row["value"] == pytest.approx(0.23, abs=0.03)
-    assert row["status"] == "calibrated" and row["year"] == BREAK
-    assert res.state_share.source in ("data", "forecast")
-    # recorded series as stored (employment ends 2024): 'forecast' source; measured 0.198 (the pre-break PIT
-    # calibration over-predicts 2024 by ~23%, so the 2025 module value is high and s0 sits below the spec's 0.23)
-    model, hist = real
+    # s0 is below the spec's live-run 0.23: the pre-break calibration window {2018, 2023, 2024} over-predicts 2024
+    # by ~23% (120.2 vs 97.6 mld zł) and s0 absorbs that level error (a 2024-only factor would give s0 ~ 0.244).
+    model, hist = real  # recorded series as stored (employment ends 2024)
     res = simulate(model, hist, {}, horizon=2, n_paths=2000, seed=0)
     assert res.state_share.source == "forecast"
-    assert _row(res)["value"] == pytest.approx(0.20, abs=0.02)
+    assert _row(res)["value"] == pytest.approx(0.198, abs=0.02)
+    assert _row(res)["status"] == "calibrated" and _row(res)["year"] == BREAK
+
+    model, hist = real_history_with_2025_bases()  # 2025 wage bill available (employment carried to 2025)
+    res = simulate(model, hist, {}, horizon=2, n_paths=2000, seed=0)
+    assert res.state_share.source == "data"
+    assert _row(res)["value"] == pytest.approx(0.212, abs=0.02)
+
+
+@pytest.mark.parametrize("last_year", [2024, 2023])
+def test_s0_independent_of_seed_and_n_paths(last_year):
+    # 2023: the break year is the 2nd forecast step, where the caller's own baseline median does vary with
+    # seed/n_paths, so this would fail if s0 came from the caller's run instead of the fixed-seed one
+    hist = _real_history()
+    model = _model(hist, last_year)
+    runs = [simulate(model, hist, {}, horizon=3, n_paths=n, seed=seed) for seed in (None, 0, 1) for n in (100, 2000)]
+    assert {r.state_share.source for r in runs} == {"forecast"}
+    assert len({r.state_share.s0 for r in runs}) == 1
+    if last_year == 2023:
+        assert len({r.baseline["pit"]["median"][1] for r in runs}) > 1
 
 
 def test_pit_2025_median_close_to_realised(real):
     model, hist = real
     res = simulate(model, hist, {}, horizon=2, n_paths=2000, seed=0)
+    # with the forecast source s0 is fitted to this median, so this mainly verifies that eps has median ~1
     i = _idx(res, 2025)
     pit = res.taxes["pit"]
     assert pit["p10"][i] <= REALISED_PIT_2025 <= pit["p90"][i]
@@ -81,6 +94,10 @@ def test_multiplier_scales_pit_from_break_only():
         # the baseline always uses m = 1
         assert two.baseline["pit"]["median"][i] == pytest.approx(one.baseline["pit"]["median"][i])
     assert two.taxes["vat"] == one.taxes["vat"] and two.taxes["cit"] == one.taxes["cit"]
+    # common random numbers: the scenario uses the baseline's eps on every path, so m = 2 doubles it exactly
+    for i, y in enumerate(two.years):
+        if y >= BREAK:
+            assert two.taxes["pit"]["median"][i] == pytest.approx(2.0 * two.baseline["pit"]["median"][i], rel=1e-9), y
     assert two.macro == one.macro  # feedback channels unchanged by the share
 
 
@@ -167,7 +184,7 @@ def test_data_source_when_model_year_is_2025():
     res = simulate(model, hist, {}, horizon=2, n_paths=300, seed=0)
     row = _row(res)
     assert res.state_share.source == "data" and row["status"] == "calibrated" and res.years[0] == 2026
-    assert row["value"] == pytest.approx(0.23, abs=0.05)
+    assert row["value"] == pytest.approx(0.212, abs=0.02)
     # every forecast year is after the break: the share applies from the first one
     ctx, _, _ = _prepare(model, hist)
     share = estimate_state_share(model, hist, ctx, res.years, np.ones((3, 2)))
