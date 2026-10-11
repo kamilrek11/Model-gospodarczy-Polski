@@ -11,7 +11,7 @@ from app.api.export import PLACEHOLDER_SENTENCE, SYNTHETIC_NOTE
 from app.api.refresh import get_store
 from app.main import app
 from app.model.params import defaults
-from app.model.simulate import PLACEHOLDER, simulate
+from app.model.simulate import simulate
 from app.store import Store
 from tests.test_simulate import synthetic_history, synthetic_model
 
@@ -52,7 +52,7 @@ def test_csv_starts_with_metadata_block(c, result):
     assert meta["dane_syntetyczne"] == "TAK"
     assert meta["uwaga"] == SYNTHETIC_NOTE and "DANE SYNTETYCZNE" in SYNTHETIC_NOTE
     assert meta["wygenerowano"].endswith("+00:00")
-    placeholders = [a["key"] for a in result["assumptions"] if a["status"] == PLACEHOLDER]
+    placeholders = [a["key"] for a in result["assumptions"] if a["status"] == "assumption"]
     assert placeholders and meta["zalozenia_niezweryfikowane"] == ", ".join(placeholders)
     assert meta["zastrzezenie"] == PLACEHOLDER_SENTENCE and "niezweryfikowanych" in PLACEHOLDER_SENTENCE
     # parameters and results blocks follow, unchanged
@@ -87,7 +87,7 @@ def test_xlsx_has_metadata_sheet(c, result):
 
 
 def test_provenance_text_is_formula_safe(c, result):
-    evil = {**result, "model_version": "=cmd()", "assumptions": [{"key": "@SUM(1)", "status": PLACEHOLDER, "value": 1, "note": ""}]}
+    evil = {**result, "model_version": "=cmd()", "assumptions": [{"key": "@SUM(1)", "status": "assumption", "value": 1, "note": ""}]}
     text = c.post("/export?format=csv", json={"params": {}, "result": evil}).content.decode("utf-8-sig")
     assert "'=cmd()" in text and "'@SUM(1)" in text
 
@@ -100,7 +100,7 @@ def test_provenance_text_is_formula_safe(c, result):
         {"model_version": "x" * 200},
         {"assumptions": "nope"},
         {"assumptions": [{"key": "A"}] * 500},
-        {"assumptions": [{"status": PLACEHOLDER}]},
+        {"assumptions": [{"status": "assumption"}]},
     ],
 )
 def test_provenance_fields_validated(c, result, bad):

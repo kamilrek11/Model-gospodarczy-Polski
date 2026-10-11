@@ -6,7 +6,7 @@ import { TAX_LABEL, TAX_ORDER } from "../charts/palette";
 const pctFmt = new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const numFmt = new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 });
 
-export const isPlaceholder = (status: string): boolean => status.includes("PLACEHOLDER");
+export const isPlaceholder = (status: string): boolean => status === "assumption" || status.includes("PLACEHOLDER");
 
 const fmtValue = (v: unknown): string => (typeof v === "number" && Number.isFinite(v) ? numFmt.format(v) : "–");
 

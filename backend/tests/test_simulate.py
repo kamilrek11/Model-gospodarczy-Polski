@@ -9,7 +9,7 @@ from app.api.refresh import get_store
 from app.main import app
 from app.model.macro import MACRO_VARS, MacroModel, fit_macro
 from app.model.params import defaults
-from app.model import config
+from app.model import config, param_meta
 from app.model.simulate import BANDS, simulate
 from app.model.taxes.vat import vat_revenue
 from app.store import Store
@@ -146,19 +146,14 @@ def test_calibration_reproduces_history_and_is_exposed(model, hist):
         assert 0.8 * last < res.baseline[tax]["median"][0] < 1.3 * last
 
 
-def test_assumptions_flag_placeholders_generated_from_config(model, hist):
+def test_assumptions_carry_status_and_source_from_meta(model, hist):
     res = simulate(model, hist, defaults(), n_paths=200, seed=0)
-    flagged = {a["key"] for a in res.assumptions if a["status"] == "PLACEHOLDER-UNVERIFIED"}
-    for key in (
-        "PIT_INCOME_DIST_DEFAULT",
-        "VAT_CONSUMPTION_SHARES",
-        "VAT_GAP",
-        "VAT_PRICE_ELASTICITY",
-        "CIT_SMALL_TAXPAYER_SHARE",
-        "PIT_BUSINESS_FLAT_SHARE",
-        "HOUSEHOLD_MPC",
-    ):
-        assert key in flagged, key
+    by_key = {a["key"]: a for a in res.assumptions}
+    for key in param_meta.PARAMETERS:
+        a = by_key[key]
+        assert a["status"] in ("from_data", "sourced", "assumption"), key
+        assert a["note"], key
+        assert {"source", "year", "url", "low", "high"} <= set(a), key
     assert all(a["note"] for a in res.assumptions)
 
 

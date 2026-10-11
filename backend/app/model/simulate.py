@@ -42,17 +42,15 @@ Calibration
 
 A module whose required series is missing (or not usable) is disabled with a message;
 no data is ever invented. All non-user constants come from app.model.config and those
-marked PLACEHOLDER-UNVERIFIED there are listed in `assumptions` automatically.
+registered in app.model.param_meta are listed in `assumptions` with their status.
 """
 
-import inspect
-import re
 from dataclasses import dataclass, field, replace
 
 import numpy as np
 import pandas as pd
 
-from app.model import config
+from app.model import config, param_meta
 from app.model.macro import MacroModel
 from app.model.params import defaults, validate
 from app.model.taxes.cit import cit_revenue
@@ -61,7 +59,12 @@ from app.model.taxes.vat import consumption_feedback, effective_vat_rate, vat_re
 
 TAXES: tuple[str, ...] = ("pit", "cit", "vat")
 BANDS: dict[str, float] = {"median": 0.5, "p10": 0.1, "p90": 0.9, "p2_5": 0.025, "p97_5": 0.975}
-PLACEHOLDER = "PLACEHOLDER-UNVERIFIED"
+
+# method-choice constants (not parameters of the registry) still listed for transparency
+METHOD_CHOICES: tuple[tuple[str, str], ...] = (
+    ("CALIBRATION_YEARS", "Number of most recent years used for the per-tax calibration factors (mean ratio of recorded revenue to module output at current law). Method choice, not a data value."),
+    ("STRUCTURAL_BREAKS", "Structural breaks: series -> first year recorded under new rules; years at or after it are not used for calibration or scored by the backtest."),
+)
 
 # series each module needs: macro bases (store names) + recorded revenue for calibration
 REQUIRED_SERIES: dict[str, tuple[str, ...]] = {
@@ -127,35 +130,12 @@ class _Context:
 # ---------------------------------------------------------------- assumptions
 
 
-def placeholder_assumptions() -> list[dict]:
-    """Constants of app.model.config with their comment; status read from the markers.
-
-    A constant without its own comment inherits the comment of the constant directly
-    above it (same block, no blank line), e.g. PIT_BUSINESS_FLAT_SHARE.
-    """
-    out: list[dict] = []
-    comments: list[str] = []
-    last_note: str | None = None
-    for line in inspect.getsource(config).splitlines():
-        stripped = line.strip()
-        if not stripped:
-            comments, last_note = [], None
-        elif stripped.startswith("#"):
-            text = stripped.lstrip("#").strip()
-            if text and not text.startswith("---"):
-                comments.append(text)
-        elif m := re.match(r"^([A-Z][A-Z0-9_]*)\s*(?::[^=]*)?=", line):
-            note = " ".join(comments) if comments else last_note
-            comments, last_note = [], note
-            name = m.group(1)
-            value = getattr(config, name)
-            out.append({
-                "key": name,
-                "value": [list(r) for r in value] if isinstance(value, tuple) else value,
-                "status": PLACEHOLDER if note and PLACEHOLDER in note else "documented",
-                "note": (note or "").replace(f"{PLACEHOLDER}:", "").replace(PLACEHOLDER, "").strip() or name,
-            })
-    return out
+def parameter_assumptions() -> list[dict]:
+    """Registered config constants (param_meta) with status/source, plus the method-choice constants."""
+    return param_meta.assumption_rows() + [
+        {"key": k, "value": getattr(config, k), "status": "model-structure", "note": n, "source": "", "year": None, "url": "", "low": None, "high": None}
+        for k, n in METHOD_CHOICES
+    ]
 
 
 # ---------------------------------------------------------------- history helpers
@@ -346,7 +326,7 @@ def simulate(
         for v in macro
     }
 
-    assumptions = placeholder_assumptions()
+    assumptions = parameter_assumptions()
     assumptions += [{"key": k, "value": None, "status": "model-structure", "note": n} for k, n in STRUCTURAL_ASSUMPTIONS]
     assumptions += [
         {"key": f"structure.break.{name}", "value": year, "status": "model-structure", "note": BREAK_NOTES.get(name, f"Załamanie strukturalne serii {name} od {year} r.")}

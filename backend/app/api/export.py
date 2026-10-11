@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from pydantic import BaseModel
 
 from app.model.params import validate
-from app.model.simulate import BANDS, PLACEHOLDER
+from app.model.simulate import BANDS
 
 HEADER = ["year", "tax", *BANDS, "baseline"]
 PARAM_HEADER = ["parametr", "wartość"]
@@ -88,7 +88,7 @@ def meta_rows(result: dict) -> list[list]:
         for a in assumptions:
             if not isinstance(a, dict) or not isinstance(a.get("key"), str) or len(a["key"]) > MAX_META_TEXT:
                 raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
-            if PLACEHOLDER in str(a.get("status", "")):
+            if a.get("status") == "assumption":
                 names.append(a["key"])
         placeholders = ", ".join(names) if names else "brak"
     rows = [
