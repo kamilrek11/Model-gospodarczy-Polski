@@ -159,3 +159,11 @@ def test_changed_values_have_before_after(registry):
 def test_registry_has_income_distribution_section():
     text = REGISTRY.read_text(encoding="utf-8")
     assert "## Rozkład dochodów PIT" in text
+
+
+def test_registry_documents_the_pit_share_decision():
+    text = REGISTRY.read_text(encoding="utf-8")
+    assert "## Udział budżetu państwa w PIT" in text
+    section = text.split("## Udział budżetu państwa w PIT", 1)[1].split("\n## ", 1)[0]
+    assert "s₀" in section and "σ" in section and re.search(r"\bm\b", section)
+    assert "jeden rok" in section or "jednego roku" in section

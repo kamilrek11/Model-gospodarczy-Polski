@@ -155,9 +155,11 @@ liczbami: `docs/data-sources-discovery.md`, sekcja „Uruchomienie na żywo 2026
     „Wiarygodność prognozy – obserwacje”). Prognozy PIT traktować jako ilustracyjne.
   - Mediany VAR dla 2025 są wyraźnie powyżej wykonania (płace, CPI, konsumpcja) – szok 2022–2024 w krótkiej próbie;
     backtest (MAPE VAT ~10%, CIT ~28%, PIT ~14%, pokrycie pasm 80% poniżej nominalnego) pokazuje za wąskie pasma.
-- **Załamanie PIT 2025**: od 2025 r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania JST;
-  97,6 → 28,75 mld zł). Kalibracja i backtest PIT używają tylko lat do 2024; prognoza PIT jest liczona według zasad sprzed
-  reformy i nie jest porównywalna z wykonaniem od 2025 r. Decyzja (PIT ogółem vs udział budżetu państwa) pozostaje otwarta.
+- **Udział budżetu państwa w PIT od 2025 r.** (reforma finansowania JST; 97,6 → 28,75 mld zł): wynik modułu PIT jest od 2025 r.
+  mnożony przez udział s = s₀ · m · ε. s₀ ≈ 0,20–0,21 jest kalibrowany na wykonaniu z jednego roku (2025) i zawiera błąd
+  prognozy modułu na ten rok (nie jest „czystym udziałem ustawowym”), m to suwak użytkownika (`pit_state_share_mult`),
+  a ε rozprasza udział (σ = 0,2, założenie). Kalibracja modułu i backtest PIT nadal używają tylko lat do 2024. Szczegóły i
+  porównanie przed → po: `docs/model-parameters.md`, sekcja „Udział budżetu państwa w PIT”.
 - **MF 2015 nieobsługiwany**: sprawozdanie za 2015 ma plik 007 w starym formacie `.xls` (dodatkowo podwójnie zagnieżdżony),
   bez `xlrd` – rok jest pomijany z ostrzeżeniem. Wpływy dostępne od 2016 r.; lat sprzed 2015 nie ma na dane.gov.pl.
 - **Kasowo vs memoriałowo**: wpływy MF to kasowe wykonanie budżetu państwa (udział budżetu państwa, bez udziałów JST);

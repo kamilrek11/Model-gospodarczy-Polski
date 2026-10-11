@@ -44,7 +44,7 @@ Comparison with MF cash state budget: VAT 2024 287.7 (MF) vs 290.7 (ESA) — clo
 
 ## 3. Unresolved items needing a human decision (ranked)
 
-1. **rev_pit structural break 2025** (state-budget PIT 97.6 → 28.75 mld zł after JST financing reform). Decide: model PIT total (state + JST shares) vs state-budget share only; with MF data you need JST shares from elsewhere for the total. Eurostat S13 D51A gives general-government total (accrual).
+1. **rev_pit structural break 2025** (state-budget PIT 97.6 → 28.75 mld zł after JST financing reform). Decide: model PIT total (state + JST shares) vs state-budget share only; with MF data you need JST shares from elsewhere for the total. Eurostat S13 D51A gives general-government total (accrual). *Resolved later:* the model keeps state-budget PIT and multiplies the module output from 2025 by a state share s = s0·m·ε calibrated on 2025 (see `docs/model-parameters.md`, "Udział budżetu państwa w PIT").
 2. **Cash state budget (MF, 2015–2025, XLSX in ZIP, label-matched parsing) vs accrual general/central government (Eurostat gov_10a_taxag, clean JSON API, 2000–2024)**. Recommendation for v1: MF dataset 163 for rev_* (it is literally "budżet państwa" and has 2025), with Eurostat S1311 as cross-check/backfill for 2000–2014 marked as different concept. Alternatively, if 2000+ history matters more than concept fidelity, Eurostat only.
 3. **consumption_nominal not in BDL** → add a Eurostat client (it would also give pkb_real level, gross_surplus to 2025, employment 2000+). Consider moving all macro to Eurostat nama_10_* for one consistent, longer source.
 4. employment concept: FTE avg paid employment (BDL 154173, 2005+) vs BAEL employed persons (2010+) vs national-accounts EMP_DC (Eurostat 2000+).
