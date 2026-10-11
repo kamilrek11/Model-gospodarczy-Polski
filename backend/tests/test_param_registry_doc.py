@@ -167,3 +167,4 @@ def test_registry_documents_the_pit_share_decision():
     section = text.split("## Udział budżetu państwa w PIT", 1)[1].split("\n## ", 1)[0]
     assert "s₀" in section and "σ" in section and re.search(r"\bm\b", section)
     assert "jeden rok" in section or "jednego roku" in section
+    assert "okno kalibracji" in section.lower() and "demo" in section.lower()

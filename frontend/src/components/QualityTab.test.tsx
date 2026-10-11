@@ -162,7 +162,7 @@ describe("QualityTab PIT state share row", () => {
     const tr = screen.getByText("PIT_STATE_SHARE", { selector: "code" }).closest("tr")!;
     expect(tr).toHaveTextContent("kalibracja");
     expect(tr).not.toHaveTextContent("calibrated");
-    expect(tr).toHaveTextContent("2025");
+    expect(within(tr).getAllByRole("cell")[2]).toHaveTextContent(/^2025$/); // Źródło column carries the year
     expect(tr).toHaveTextContent("jednego roku");
   });
 

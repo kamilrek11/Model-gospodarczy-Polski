@@ -151,12 +151,12 @@ liczbami: `docs/data-sources-discovery.md`, sekcja „Uruchomienie na żywo 2026
     elastyczność zatrudnienia względem PKB, rozrzut udziału budżetu państwa w PIT. Każde ma zakres niepewności w rejestrze; wymagają weryfikacji przez ekonomistę.
   - **Rozkład dochodów PIT** jest zastępczy; dane MF („Informacja dotycząca rozliczenia PIT”, dane.gov.pl zbiór 191) są tylko
     w PDF (do 2021 r.). Na danych na żywo rozkład zastępczy daje silną progresję („bracket creep”): elastyczność części skali
-    PIT względem bazy ≈ 1,85, mediana PIT 2025 128 mld zł przy 97,6 mld zł wykonania 2024 (szczegóły w raporcie z rozpoznania,
+    PIT względem bazy ≈ 1,85, wynik modułu PIT 2025 przed udziałem budżetu państwa 128 mld zł (po udziale ok. 29 mld zł) przy 97,6 mld zł wykonania 2024 (szczegóły w raporcie z rozpoznania,
     „Wiarygodność prognozy – obserwacje”). Prognozy PIT traktować jako ilustracyjne.
   - Mediany VAR dla 2025 są wyraźnie powyżej wykonania (płace, CPI, konsumpcja) – szok 2022–2024 w krótkiej próbie;
     backtest (MAPE VAT ~10%, CIT ~28%, PIT ~14%, pokrycie pasm 80% poniżej nominalnego) pokazuje za wąskie pasma.
 - **Udział budżetu państwa w PIT od 2025 r.** (reforma finansowania JST; 97,6 → 28,75 mld zł): wynik modułu PIT jest od 2025 r.
-  mnożony przez udział s = s₀ · m · ε. s₀ ≈ 0,20–0,21 jest kalibrowany na wykonaniu z jednego roku (2025) i zawiera błąd
+  mnożony przez udział s = s₀ · m · ε. s₀ jest kalibrowany na wykonaniu z jednego roku (2025), zależy od okna kalibracji PIT (0,232 na migawce demo i danych na żywo, 0,198 / 0,212 na nagranym zestawie testowym) i zawiera błąd
   prognozy modułu na ten rok (nie jest „czystym udziałem ustawowym”), m to suwak użytkownika (`pit_state_share_mult`),
   a ε rozprasza udział (σ = 0,2, założenie). Kalibracja modułu i backtest PIT nadal używają tylko lat do 2024. Szczegóły i
   porównanie przed → po: `docs/model-parameters.md`, sekcja „Udział budżetu państwa w PIT”.

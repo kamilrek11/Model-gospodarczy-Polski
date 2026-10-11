@@ -83,14 +83,15 @@ def _num(v: float) -> str:
     return f"{v:g}".replace(".", ",")
 
 
-def _share_meta(value: Any, year: int | None, params: dict | None) -> list:
+def _share_meta(value: Any, year: int | None, params: dict | None, status: Any = None) -> list:
     """Metadane row of the PIT state-budget share: s0 from the result's assumption row, multiplier from the request."""
     ok = isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and 0 < value < 1e6
     mult = (params or {}).get("pit_state_share_mult", 1.0)
     if not ok or not isinstance(mult, (int, float)) or isinstance(mult, bool) or not math.isfinite(mult):
         raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
     pl = lambda x, d: f"{x:.{d}f}".replace(".", ",")  # noqa: E731
-    text = f"{pl(value, 3)}; mnożnik {pl(mult, 2)}; efektywny {pl(value * mult, 3)}; {'brak roku' if year is None else year}"
+    est = "" if status == "calibrated" or status is None else " (nie oszacowano)"
+    text = f"{pl(value, 3)}{est}; mnożnik {pl(mult, 2)}; efektywny {pl(value * mult, 3)}; {'brak roku' if year is None else year}"
     return ["pit_udzial_budzetu", text]
 
 
@@ -120,7 +121,7 @@ def meta_rows(result: dict, params: dict | None = None) -> list[list]:
             if not (is_num(low) and is_num(high)) or not isinstance(range_text, str) or len(range_text) > MAX_SOURCE_TEXT:
                 raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
             if a["key"] == "PIT_STATE_SHARE":
-                share_row = _share_meta(a.get("value"), year, params)
+                share_row = _share_meta(a.get("value"), year, params, status)
             if status == "assumption":
                 names.append(a["key"])
             if status in STATUS_LABEL:

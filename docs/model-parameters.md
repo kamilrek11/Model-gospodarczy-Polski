@@ -1,6 +1,6 @@
 # Rejestr parametrów modelu
 
-Stan: 2026-10-11 (Task 2 planu `docs/superpowers/plans/2026-10-11-parametry-modelu.md`). Rejestr opisuje 14 stałych
+Stan: 2026-10-11 (plany `docs/superpowers/plans/2026-10-11-parametry-modelu.md` i `2026-10-11-udzial-pit.md`). Rejestr opisuje 14 stałych
 z `backend/app/model/config.py`, które nie są parametrami ustawianymi przez użytkownika. Kopia maszynowa:
 `backend/app/model/param_meta.py` (`PARAMETERS`); zgodność obu pilnuje `backend/tests/test_param_registry_doc.py`.
 `CALIBRATION_YEARS` i `STRUCTURAL_BREAKS` to wybory metody, nie dane – poza rejestrem.
@@ -51,7 +51,7 @@ pośrednio (przez średnią) i przede wszystkim dynamikę prognozy oraz skutki s
 | `HOUSEHOLD_MPC` | 0,6 | krańcowa skłonność (bezwymiarowa) | założenie | brak (patrz Uwagi) | 0,3–0,9 | Nie znaleziono weryfikowalnego oszacowania MPC z dochodu rozporządzalnego dla Polski: dostępne prace dotyczą MPC względem PKB (Ossowski 2019, REME 2(29)) lub z majątku. Zakres od wygładzania konsumpcji do gospodarstw z ograniczeniami płynności. |  |
 | `CONSUMPTION_GDP_SHARE` | 0,57 (zapas); z danych 2024: 0,563 | udział w PKB | z danych | consumption_nominal (Eurostat nama_10_gdp, P31_S14, CP_MNAC) / gdp_nominal (GUS BDL 458271), ostatni wspólny rok w bazie (2024, https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/nama_10_gdp?geo=PL&na_item=P31_S14&unit=CP_MNAC) | 0,55–0,66 (2000–2024: 0,556–0,658) | Obie serie są w bazie (gdp_nominal jako seria pomocnicza bramki jednostek). Wartość jest liczona przy każdej symulacji (`simulate.resolve_constants`); brak serii lub udział poza 0,4–0,7 → zapas z `config.py` i status „założenie” w wyniku. Wartość w `config.py` nie zmieniona. | przy 0,563 zamiast 0,57: mediany 2025 przy domyślnych parametrach bez zmian (VAT 324,42, PIT 144,87, CIT 72,54 mld zł – udział wchodzi tylko przez odpowiedź PKB na scenariusz); skutki scenariuszy zmieniają się o mniej niż 0,01 mld zł |
 | `EMPLOYMENT_GDP_ELASTICITY` | 0,5 | elastyczność (bezwymiarowa) | założenie | brak (patrz Uwagi) | 0,25–0,8 | Literatura dla Polski (np. Bartosik 2020, Equilibrium 15(4), https://doi.org/10.24136/eq.2020.032) szacuje wrażliwość bezrobocia, nie zatrudnienia. Kontrola na danych w bazie (MNK na różnicach logarytmów zatrudnienia i PKB realnego): 0,52 (bł. std. 0,14) w 2006–2024, 0,40 (0,11) w 2011–2024 – zgodne z 0,5. Kandydat na „z danych”, ale zatrudnienie BDL pomija małe podmioty, a oszacowanie jest niepewne. |  |
-| `PIT_STATE_SHARE_SIGMA` | 0,2 | odchylenie logarytmu (bezwymiarowe) | założenie | brak (patrz Uwagi) | 0,1–0,3 | Odchylenie standardowe logarytmu losowego czynnika ε (lognormalnego, mediana 1) przy udziale budżetu państwa w PIT od 2025 r. Brak źródła: udział s₀ jest oszacowany z jednego roku (2025), więc nie ma serii, z której dałoby się policzyć jego rozrzut; 0,2 to założony rozrzut jednego punktu kalibracyjnego (przedział 0,1–0,3). Szczegóły w sekcji „Udział budżetu państwa w PIT” (s₀, m, σ, ograniczenie „jeden rok”). | — |
+| `PIT_STATE_SHARE_SIGMA` | 0,2 | odchylenie logarytmu (bezwymiarowe) | założenie | brak (patrz Uwagi) | 0,1–0,3 | Odchylenie standardowe logarytmu losowego czynnika ε (lognormalnego, mediana 1) przy udziale budżetu państwa w PIT od 2025 r. Brak źródła: udział s₀ jest oszacowany z jednego roku (2025), więc nie ma serii, z której dałoby się policzyć jego rozrzut; 0,2 to założony rozrzut jednego punktu kalibracyjnego (przedział 0,1–0,3). Szczegóły w sekcji „Udział budżetu państwa w PIT” (s₀, m, σ, ograniczenie „jeden rok”). |  |
 
 ## Wynik łączny (wszystkie zmiany Task 2)
 
@@ -121,8 +121,8 @@ załamania (`STRUCTURAL_BREAKS["rev_pit"]` = 2025) wynik modułu jest mnożony p
   „prognoza”). s₀ liczony jest ze stałym ziarnem wewnętrznym (2025) i 2000 ścieżkami, więc jest powtarzalny i nie zależy
   od ziarna ani liczby ścieżek wybranych przez użytkownika. Bez serii lub bez roku załamania s₀ = 1 i PIT liczony jest
   jak dotąd (komunikat w założeniach).
-- **m** – mnożnik użytkownika `pit_state_share_mult` (suwak; 1 = bez zmiany). Skaluje PIT od roku załamania, gdy nie ma
-  jeszcze danych roku 2025 (np. przy zmianie zasad podziału).
+- **m** – mnożnik użytkownika `pit_state_share_mult` (suwak; 1 = bez zmiany). Działa zawsze, od roku załamania; bez
+  danych roku 2025 skaluje PIT sprzed reformy (np. przy zmianie zasad podziału).
 - **ε** – losowy czynnik lognormalny (mediana 1) o odchyleniu logarytmu **σ** = `PIT_STATE_SHARE_SIGMA` = 0,2, ten sam
   dla bazy i scenariusza na danej ścieżce; występuje tylko wtedy, gdy s₀ oszacowano z danych (bez jednego punktu
   kalibracyjnego nie ma czego rozpraszać).
@@ -133,10 +133,17 @@ załamania (`STRUCTURAL_BREAKS["rev_pit"]` = 2025) wynik modułu jest mnożony p
 |---|---|---|---|
 | nagrane serie bez zmian | prognoza | 0,198 | 28,75 / mediana MC 144,87 |
 | historia testowa z masą płac 2025 | dane | 0,212 | 28,75 / 135,57 |
+| migawka demo `demo/real-data.db` | prognoza | 0,232 | 28,75 / 123,80 |
 
-Wartość 0,23 z pierwszego przebiegu na żywo pochodzi z innych lat kalibracji i nie jest używana w tym dokumencie.
+**s₀ zależy od okna kalibracji PIT**, bo moduł jest mnożony przez czynnik kalibracji z lat sprzed reformy: na migawce
+demo i na danych na żywo (`rev_pit` za komplet lat) okno to {2022, 2023, 2024} i s₀ = 0,232; na nagranym zestawie testowym
+(bez 2017 i 2019–2022) okno to {2018, 2023, 2024} i s₀ = 0,198 (0,212 ze źródłem „dane”). Przy źródle „prognoza” s₀
+skraca czynnik kalibracji, więc mediany po uwzględnieniu udziału są identyczne na demo i na nagranych danych (28,61 /
+33,73 / 39,71 / 46,36 / 54,51): okno kalibracji decyduje o s₀, nie o prognozie. Gdy w bazie pojawi się masa płac 2025
+(zatrudnienie BDL za 2025), a model nadal kończy się w 2024, s₀ przełącza się na źródło „dane” (na nagranych danych
+0,198 → 0,212), a mediana PIT 2025 wynosi ok. 30,7 zamiast ok. 28,75 mld zł.
 
-**Dlaczego s₀ nie jest „czystym udziałem ustawowym”.** Okno kalibracji PIT na nagranych danych to {2018, 2023, 2024}
+**Dlaczego s₀ nie jest „czystym udziałem ustawowym”** (opis dla nagranego zestawu). Okno kalibracji PIT na nagranych danych to {2018, 2023, 2024}
 (w nagranym zestawie MF nie ma `rev_pit` za 2017 ani 2019–2022). Moduł zawyża PIT 2024 o ok. 23% (moduł 120,2 wobec
 wykonania 97,6 mld zł), a s₀ pochłania ten błąd poziomu: z czynnikiem kalibracji z samego 2024 r. wyszłoby ok. 0,244.
 Wartość s₀ zawiera więc błąd prognozy modułu na 2025 r.

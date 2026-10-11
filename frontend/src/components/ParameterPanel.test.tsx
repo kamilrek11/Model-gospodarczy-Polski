@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ParamSpec } from "../api/types";
@@ -130,6 +130,13 @@ describe("ParameterPanel multiplier slider", () => {
     const input = screen.getByLabelText(mult.label, { exact: true });
     await userEvent.clear(input);
     await userEvent.type(input, "1,5");
+    expect(onChange).toHaveBeenLastCalledWith("pit_state_share_mult", 1.5);
+  });
+
+  it("driving the range slider reports the numeric multiplier", () => {
+    const onChange = vi.fn();
+    render(<ParameterPanel schema={[mult]} values={{ [mult.key]: 1 }} onChange={onChange} onReset={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(`${mult.label} – suwak`), { target: { value: "1.5" } });
     expect(onChange).toHaveBeenLastCalledWith("pit_state_share_mult", 1.5);
   });
 

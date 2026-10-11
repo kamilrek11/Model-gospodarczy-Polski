@@ -321,6 +321,19 @@ def test_export_contains_pit_share_metadata(client):
     assert {row[0].value: row[1].value for row in ws.iter_rows()}["pit_udzial_budzetu"] == want
 
 
+def test_export_share_row_says_when_not_estimated(client):
+    import csv as _csv
+    import io
+
+    c, res, params = _share_result(client)
+    for a in res["assumptions"]:
+        if a["key"] == "PIT_STATE_SHARE":
+            a.update(value=1.0, status="assumption", year=2025)
+    r = c.post("/export?format=csv", json={"params": params, "result": res})
+    meta = {row[0]: row[1] for row in _csv.reader(io.StringIO(r.content.decode("utf-8-sig"))) if len(row) == 2}
+    assert meta["pit_udzial_budzetu"] == "1,000 (nie oszacowano); mnożnik 0,80; efektywny 0,800; 2025"
+
+
 def test_export_without_share_row_still_works(client):
     c, store = client
     hist, model = fill(store)
