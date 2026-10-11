@@ -236,6 +236,7 @@ def test_backtest_skips_pit_targets_from_break_year_and_notes_it():
     res = backtest(data, horizon=2)
     assert "pit" in res.mape and res.message is None
     assert NOTE_PIT_BREAK in res.notes
+    assert any(n.startswith("W backteście PIT liczony jest według zasad sprzed 2025 r. (bez udziału budżetu państwa)") for n in res.notes)
     assert NOTE_PIT_BREAK.startswith("PIT w budżecie państwa: zmiana zasad podziału od 2025 r.")
 
     # PIT 2025 is never scored: any value there gives exactly the same PIT metrics as no value at all
@@ -243,6 +244,7 @@ def test_backtest_skips_pit_targets_from_break_year_and_notes_it():
     without["rev_pit"] = data["rev_pit"].loc[:2024]
     ref = backtest(without, horizon=2)
     assert NOTE_PIT_BREAK not in ref.notes  # nothing skipped -> no note
+    assert not any("zasad sprzed 2025" in n for n in ref.notes)
     for v in (1e-3, 1e4):
         odd = dict(data)
         pit = data["rev_pit"].copy()
@@ -270,14 +272,14 @@ def test_backtest_does_not_score_or_train_on_2025_pit(monkeypatch):
 
     def spy(model, train, *a, **k):
         res = real_sim(model, train, *a, **k)
-        seen.append((int(train["rev_pit"].index.max()), res.state_share.s0, max(train["wage_nominal"].index)))
+        seen.append((int(train["rev_pit"].index.max()), res.state_share.s0, int(train["wage_nominal"].index.max())))  # (rev_pit max, s0, origin)
         return res
 
     monkeypatch.setattr(bt, "simulate", spy)
     res = bt.backtest(data, horizon=2)
     assert "pit" in res.mape and seen
     assert any(origin >= 2025 for _, _, origin in seen)  # the training window reaches the break year
-    assert all(mx < 2025 and s0 == 1.0 for mx, s0, _ in seen)
+    assert all(mx < 2025 and s0 == 1.0 for mx, s0, _wage_max in seen)
 
 
 def test_backtest_note_mentions_share():

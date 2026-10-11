@@ -54,6 +54,11 @@ class BacktestResult:
         }
 
 
+def _before_break(name: str, df: pd.DataFrame) -> pd.DataFrame:
+    brk = config.STRUCTURAL_BREAKS.get(name)
+    return df if brk is None else df[df.index < brk]
+
+
 def _notes(n_skipped: int, broken: set[str] = frozenset()) -> list[str]:
     notes = [NOTE_CURRENT_LAW, NOTE_METRICS]
     if n_skipped:
@@ -62,6 +67,8 @@ def _notes(n_skipped: int, broken: set[str] = frozenset()) -> list[str]:
         year = config.STRUCTURAL_BREAKS[name]
         notes.append(BREAK_NOTES.get(name, f"Załamanie strukturalne serii {name} od {year} r."))
         notes.append(f"Realizacje {name} od {year} r. nie są oceniane w backteście (załamanie strukturalne).")
+        if name == "rev_pit":
+            notes.append(f"W backteście PIT liczony jest według zasad sprzed {year} r. (bez udziału budżetu państwa); backtest nie ocenia prognoz udziału.")
     return notes
 
 
@@ -86,7 +93,7 @@ def backtest(data: dict[str, pd.DataFrame], horizon: int = 3, min_train: int = M
             continue
         # series past a structural break are cut before it: neither the module calibration nor the PIT state
         # share (s0 = 1 here) may learn from the new regime, so the backtest never sees the 2025 PIT split
-        train = {k: df[(df.index <= origin) & (df.index < config.STRUCTURAL_BREAKS.get(k, 10**9))] for k, df in data.items()}
+        train = {k: _before_break(k, df[df.index <= origin]) for k, df in data.items()}
         try:
             model = fit_macro(macro[macro.index <= origin], lags=1)
             res = simulate(model, train, params, horizon, BACKTEST_PATHS, BACKTEST_SEED)
