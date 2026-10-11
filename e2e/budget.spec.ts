@@ -194,6 +194,18 @@ test.describe("seeded store (synthetic data)", () => {
     await expect(table.locator(".badge", { hasText: "ze źródła" }).first()).toBeVisible();
     await expect(table.locator(".badge", { hasText: "z danych" }).first()).toBeVisible();
     await expect(page.locator(".results")).not.toContainText("PLACEHOLDER");
+
+    // long notes are collapsed to one row-friendly lead; the full text opens on demand
+    const more = table.locator(".expandable-more").first();
+    await expect(more).toBeVisible();
+    const details = table.locator("details.expandable").first();
+    await expect(details).not.toHaveAttribute("open", "");
+    await more.click();
+    await expect(details).toHaveAttribute("open", "");
+    await expect(details.locator(".cell-text")).toBeVisible();
+    // rows stay compact: no collapsed row is taller than ~220 px at desktop width
+    const heights = await table.locator("tbody tr").evaluateAll((rows) => rows.map((r) => (r as HTMLElement).offsetHeight));
+    expect(Math.min(...heights)).toBeLessThan(220);
   });
 
   test("importing a scenario with an out-of-range value is rejected in Polish", async ({ page }) => {

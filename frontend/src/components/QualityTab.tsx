@@ -2,9 +2,15 @@ import { useEffect, useState } from "react";
 import { ApiError, getBacktest } from "../api/client";
 import type { AssumptionValue, BacktestResult, SimulationResult, TaxKey } from "../api/types";
 import { TAX_LABEL, TAX_ORDER } from "../charts/palette";
+import { ExpandableText, SHORT_LIMIT } from "./ExpandableText";
 
 const pctFmt = new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const numFmt = new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 });
+const numFmtPlain = new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 4 });
+const numFmtSci = new Intl.NumberFormat("pl-PL", { notation: "scientific", maximumFractionDigits: 3 });
+/** Wartości o module < 0,001 (np. współczynnik kalibracji PIT ~7e-9) w zapisie naukowym, żeby nie wyglądały jak „0”. */
+const numFmt = {
+  format: (v: number): string => (v !== 0 && Math.abs(v) < 0.001 ? numFmtSci.format(v) : numFmtPlain.format(v)),
+};
 
 /** Wyniki zapisane przed rejestrem statusów miały status z napisem PLACEHOLDER – traktujemy jak „założenie”. */
 const normalizeStatus = (status: string): string => (status.includes("PLACEHOLDER") ? "assumption" : status);
@@ -198,17 +204,24 @@ export function QualityTab({ sim, refreshKey = 0 }: { sim: SimulationResult | nu
                           <span className={isPlaceholder(a.status) ? "badge badge-warn" : "badge"}>{statusLabel(a.status)}</span>
                         </td>
                         <td>
-                          {isHttpUrl(a.url) ? (
+                          {isHttpUrl(a.url) && src.length <= SHORT_LIMIT ? (
                             <a href={a.url} target="_blank" rel="noopener noreferrer">
                               {src === "–" ? a.url : src}
                             </a>
                           ) : (
-                            src
+                            <>
+                              {src === "–" ? src : <ExpandableText text={src} />}
+                              {isHttpUrl(a.url) && (
+                                <a className="source-link" href={a.url} target="_blank" rel="noopener noreferrer">
+                                  Otwórz źródło
+                                </a>
+                              )}
+                            </>
                           )}
                         </td>
                         <td>{rangeText(a.low, a.high, a.range_text)}</td>
                         <td>
-                          <small>{a.note}</small>
+                          <ExpandableText text={a.note} />
                         </td>
                       </tr>
                     );

@@ -87,6 +87,37 @@ describe("QualityTab constant provenance table", () => {
     expect(screen.getByRole("note")).toHaveTextContent("1 stałych ma status");
   });
 
+  it("collapses long notes and long sources behind 'Pokaż więcej' and keeps a safe source link", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(bt)));
+    const longText = `Pierwsze zdanie. ${"Długi dalszy opis stałej i jej źródła. ".repeat(10)}KONIEC`;
+    const longRows = [
+      { key: "LONG", value: 0.5, status: "assumption", note: longText, source: longText, year: 2021, url: "https://example.org/a.pdf", low: 0.1, high: 0.9 },
+      { key: "SHORT", value: 1, status: "assumption", note: "Krótka uwaga.", source: "", year: null, url: "", low: null, high: null },
+    ];
+    const { container } = render(<QualityTab sim={{ ...sim, assumptions: longRows } as SimulationResult} />);
+    await screen.findByText("brak");
+    const long = screen.getByText("LONG", { selector: "code" }).closest("tr")!;
+    expect(within(long).getAllByText("Pokaż więcej").length).toBe(2); // note and source
+    expect(long.textContent).toContain("KONIEC"); // nothing is dropped from the DOM
+    const link = within(long).getByRole("link", { name: "Otwórz źródło" });
+    expect(link).toHaveAttribute("href", "https://example.org/a.pdf");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+    const short = screen.getByText("SHORT", { selector: "code" }).closest("tr")!;
+    expect(within(short).getByText("Krótka uwaga.")).toBeInTheDocument();
+    expect(short.querySelector("details")).toBeNull();
+    expect(container.querySelectorAll("tr.placeholder").length).toBe(2);
+  });
+
+  it("formats tiny numbers in scientific notation instead of 0", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(bt)));
+    const tiny = [{ key: "TINY", value: 6.78716e-9, status: "assumption", note: "n", source: "", year: null, url: "", low: null, high: null }];
+    render(<QualityTab sim={{ ...sim, assumptions: tiny } as SimulationResult} />);
+    await screen.findByText("brak");
+    const row = screen.getByText("TINY", { selector: "code" }).closest("tr")!;
+    expect(row).toHaveTextContent(/6,787E-9|6,787e-9/i);
+    expect(row).not.toHaveTextContent("= 0");
+  });
+
   it("shows no warning when every constant has a source", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json(bt)));
     render(<QualityTab sim={{ ...sim, assumptions: rows.filter((r) => r.key !== "ASM") } as SimulationResult} />);

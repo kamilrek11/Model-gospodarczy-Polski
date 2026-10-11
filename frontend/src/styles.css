@@ -151,7 +151,20 @@ button.primary:disabled { opacity: 0.6; cursor: progress; }
 .field { display: flex; flex-direction: column; gap: 0.25rem; }
 tr.placeholder > td, tr.placeholder > th { background: var(--warn-bg); color: var(--warn-fg); border-top: 1px solid var(--warn-border); border-bottom: 1px solid var(--warn-border); }
 tr.placeholder small, tr.placeholder a { color: var(--warn-fg); }
+.assumptions-table { width: 100%; }
 .assumptions-table td, .assumptions-table th { vertical-align: top; text-align: left; }
+.assumptions-table th[scope="row"] { min-width: 17rem; overflow-wrap: anywhere; }
+.assumptions-table th:nth-child(2), .assumptions-table td:nth-child(2) { min-width: 7rem; }
+.assumptions-table th:nth-child(4), .assumptions-table td:nth-child(4) { min-width: 14rem; max-width: 20rem; }
+.assumptions-table th:nth-child(5), .assumptions-table td:nth-child(5) { min-width: 7rem; }
+.assumptions-table th:nth-child(6), .assumptions-table td:nth-child(6) { min-width: 26rem; width: 40%; }
+.assumptions-table .cell-text { margin: 0; font-size: 0.85rem; line-height: 1.4; max-width: 60ch; }
+.expandable summary { cursor: pointer; list-style: none; font-size: 0.85rem; line-height: 1.4; max-width: 60ch; }
+.expandable summary::-webkit-details-marker { display: none; }
+.expandable-more, .expandable-less { text-decoration: underline; white-space: nowrap; font-weight: 600; }
+.expandable-less, .expandable[open] .expandable-more, .expandable[open] .expandable-lead { display: none; }
+.expandable[open] .expandable-less { display: inline; }
+.expandable[open] summary { margin-bottom: 0.25rem; }
 .assumptions-table .kv-list { margin: 0; }
 .badge { font-size: 0.75rem; padding: 0.1rem 0.4rem; border: 1px solid var(--grid); border-radius: 4px; white-space: nowrap; }
 .badge-warn { border-color: var(--warn-border); font-weight: 700; }
@@ -164,3 +177,5 @@ tr.placeholder small, tr.placeholder a { color: var(--warn-fg); }
 .data-info { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; font-size: 0.85rem; margin-left: auto; }
 .data-info .refresh-failed { font-weight: 700; text-decoration: underline; }
 .topbar .data-info button.primary { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.6); }
+
+.assumptions-table .source-link { display: inline-block; margin-top: 0.25rem; font-size: 0.85rem; }
