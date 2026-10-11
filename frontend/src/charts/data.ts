@@ -113,7 +113,7 @@ export function structuralBreakYear(sim: SimulationResult, tax: TaxKey): number 
 /** Krótka notka pod wykresem; PIT ma własny tekst (reforma finansowania JST od 2025 r.). */
 export function breakNote(tax: TaxKey, year: number): string {
   if (tax === "pit") {
-    return `Od ${year} r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania JST) – wykonanie od ${year} r. nie jest porównywalne z prognozą liczoną według wcześniejszych zasad.`;
+    return `Od ${year} r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania JST); prognoza uwzględnia udział budżetu państwa po reformie, oszacowany z jednego roku (${year}).`;
   }
   return `Od ${year} r. zmiana zasad (załamanie strukturalne) – wykonanie od ${year} r. nie jest porównywalne z prognozą.`;
 }

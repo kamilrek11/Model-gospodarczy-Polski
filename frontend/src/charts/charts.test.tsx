@@ -129,7 +129,9 @@ describe("ForecastVsActual structural break note", () => {
     const note = screen.getByTestId("break-note");
     expect(note).toHaveTextContent("Od 2025 r.");
     expect(note).toHaveTextContent("JST");
-    expect(note).toHaveTextContent("nie jest porównywalne z prognozą");
+    expect(note).toHaveTextContent("udział budżetu państwa po reformie");
+    expect(note).toHaveTextContent("oszacowany z jednego roku (2025)");
+    expect(note).not.toHaveTextContent("nie jest porównywalne z prognozą");
   });
 
   it("draws a reference line at the break year in the svg", () => {

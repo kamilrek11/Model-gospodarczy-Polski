@@ -103,3 +103,40 @@ describe("ParameterPanel with the real backend contract", () => {
     for (const s of real) expect(screen.getByLabelText(s.label, { exact: true })).toBeInTheDocument();
   });
 });
+
+describe("ParameterPanel multiplier slider", () => {
+  const mult: ParamSpec = {
+    key: "pit_state_share_mult",
+    label: "PIT - udział budżetu państwa (mnożnik względem 2025)",
+    tax: "pit",
+    unit: "mnożnik",
+    default: 1,
+    min: 0.5,
+    max: 2,
+    step: 0.05,
+    description: "Mnożnik udziału budżetu państwa w PIT względem 2025 r.",
+  };
+
+  it("shows the unit, range and value without percent conversion", async () => {
+    const onChange = vi.fn();
+    render(<ParameterPanel schema={[mult]} values={{ [mult.key]: 1 }} onChange={onChange} onReset={vi.fn()} />);
+    const slider = screen.getByLabelText(`${mult.label} – suwak`);
+    expect(slider).toHaveAttribute("min", "0.5");
+    expect(slider).toHaveAttribute("max", "2");
+    expect(slider).toHaveAttribute("step", "0.05");
+    expect(slider).toHaveValue("1");
+    expect(screen.getByText("mnożnik", { selector: ".unit" })).toBeInTheDocument();
+    expect(screen.getByText(/Baza: 1 mnożnik/)).toBeInTheDocument();
+    const input = screen.getByLabelText(mult.label, { exact: true });
+    await userEvent.clear(input);
+    await userEvent.type(input, "1,5");
+    expect(onChange).toHaveBeenLastCalledWith("pit_state_share_mult", 1.5);
+  });
+
+  it("real schema carries the multiplier with the Polish label", () => {
+    const real = (realParameters as ParamSpec[]).find((s) => s.key === "pit_state_share_mult")!;
+    expect(real.unit).toBe("mnożnik");
+    expect(real.label).toBe(mult.label);
+    expect([real.min, real.max, real.default]).toEqual([0.5, 2, 1]);
+  });
+});

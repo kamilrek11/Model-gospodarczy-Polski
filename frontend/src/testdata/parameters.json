@@ -74,7 +74,7 @@
     "min": 0.5,
     "max": 2.0,
     "step": 0.05,
-    "description": "Mnożnik udziału budżetu państwa w PIT względem 2025 r. (1 = udział z 2025 r.); udział oszacowany z jednego roku."
+    "description": "Mnożnik udziału budżetu państwa w PIT względem 2025 r. (1 = udział z 2025 r.); udział oszacowany z jednego roku. Bez wykonania za 2025 r. mnożnik skaluje PIT liczony według zasad sprzed reformy (zob. Jakość modelu)."
   },
   {
     "key": "vat_rate_standard",

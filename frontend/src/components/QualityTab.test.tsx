@@ -149,3 +149,28 @@ describe("QualityTab constant provenance table", () => {
     expect(screen.getByText("OLDDOC", { selector: "code" }).closest("tr")).toHaveTextContent("udokumentowane");
   });
 });
+
+describe("QualityTab PIT state share row", () => {
+  it("shows the calibrated badge, year and the one-year note", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(bt)));
+    const row = {
+      key: "PIT_STATE_SHARE", value: 0.62, status: "calibrated", year: 2025, source: "", url: "", low: 0.51, high: 0.76,
+      note: "Udział budżetu państwa w PIT, oszacowany z jednego roku (2025); efektywny udział 0,62.",
+    };
+    render(<QualityTab sim={{ ...sim, assumptions: [...sim.assumptions.filter((a) => a.key !== "PIT_STATE_SHARE"), row] } as SimulationResult} />);
+    await screen.findByText("brak");
+    const tr = screen.getByText("PIT_STATE_SHARE", { selector: "code" }).closest("tr")!;
+    expect(tr).toHaveTextContent("kalibracja");
+    expect(tr).not.toHaveTextContent("calibrated");
+    expect(tr).toHaveTextContent("2025");
+    expect(tr).toHaveTextContent("jednego roku");
+  });
+
+  it("real fixture row without 2025 data is an assumption that scales the pre-reform PIT", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(bt)));
+    render(<QualityTab sim={sim} />);
+    await screen.findByText("brak");
+    const tr = screen.getByText("PIT_STATE_SHARE", { selector: "code" }).closest("tr")!;
+    expect(tr).toHaveTextContent("PIT liczony według zasad sprzed 2025 r.");
+  });
+});

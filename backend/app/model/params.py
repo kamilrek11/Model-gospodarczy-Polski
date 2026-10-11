@@ -31,7 +31,7 @@ PARAMETER_SCHEMA: list[ParamSpec] = [
     _rate("pit_lump_rate_default", "PIT - ryczałt (stawka domyślna)", "pit", 0.12, "Domyślna stawka ryczałtu od przychodów ewidencjonowanych."),
     ParamSpec(
         "pit_state_share_mult", "PIT - udział budżetu państwa (mnożnik względem 2025)", "pit", "mnożnik", 1.0, 0.5, 2.0, 0.05,
-        "Mnożnik udziału budżetu państwa w PIT względem 2025 r. (1 = udział z 2025 r.); udział oszacowany z jednego roku.",
+        "Mnożnik udziału budżetu państwa w PIT względem 2025 r. (1 = udział z 2025 r.); udział oszacowany z jednego roku. Bez wykonania za 2025 r. mnożnik skaluje PIT liczony według zasad sprzed reformy (zob. Jakość modelu).",
     ),
     _rate("vat_rate_standard", "VAT - stawka podstawowa", "vat", 0.23, "Podstawowa stawka VAT."),
     _rate("vat_rate_reduced1", "VAT - stawka obniżona I", "vat", 0.08, "Pierwsza obniżona stawka VAT."),

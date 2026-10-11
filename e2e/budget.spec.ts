@@ -74,6 +74,20 @@ test.describe("seeded store (synthetic data)", () => {
     await expect(page.getByTestId("deviation-vat_rate_standard")).toBeVisible();
   });
 
+  test("PIT state-share slider changes PIT, chart carries the share note, Quality tab shows the calibrated share row", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("group", { name: "Wybór podatku" }).getByRole("button", { name: "PIT" }).click();
+    await expect(page.getByTestId("metric-row")).toContainText("mld zł");
+    await expect(page.getByTestId("break-note")).toContainText("udział budżetu państwa po reformie");
+    await page.getByLabel("PIT - udział budżetu państwa (mnożnik względem 2025)", { exact: true }).fill("1,5");
+    await expect.poll(() => metricText(page), { timeout: 8_000 }).toMatch(/\+\d[\d\s ]*,\d\d mld zł/);
+    await expect(page.getByTestId("deviation-pit_state_share_mult")).toBeVisible();
+    await page.getByRole("tab", { name: "Jakość modelu" }).click();
+    const row = page.getByRole("table", { name: /Stałe i założenia modelu/ }).locator("tr").filter({ has: page.locator("code", { hasText: /^PIT_STATE_SHARE$/ }) });
+    await expect(row.locator(".badge", { hasText: "kalibracja" })).toBeVisible();
+    await expect(row).toContainText("rev_pit 2025");
+  });
+
   test("save scenario, load it, compare two scenarios", async ({ page }) => {
     await page.goto("/");
     const pick = page.getByLabel("Zapisane scenariusze");
