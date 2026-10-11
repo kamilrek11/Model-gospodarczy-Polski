@@ -31,4 +31,13 @@ describe("QualityTab with real backend assumptions", () => {
     expect(within(table).getAllByRole("row")).toHaveLength(14);
     expect(table).toHaveTextContent("520 000");
   });
+
+  it("shows the from_data status for the constant computed from stored series", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(bt)));
+    render(<QualityTab sim={sim} />);
+    await screen.findByText("brak");
+    const row = screen.getByText("CONSUMPTION_GDP_SHARE", { selector: "code" }).closest("li")!;
+    expect(row).toHaveTextContent("from_data");
+    expect(row).toHaveTextContent("= 0,57");
+  });
 });

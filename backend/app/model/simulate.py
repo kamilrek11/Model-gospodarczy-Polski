@@ -127,12 +127,13 @@ class _Context:
     dist: IncomeDist
     gs_anchor: float | None  # gross surplus in the model's last year
     nominal_gdp_anchor: float  # pkb_real * cpi in the model's last year
-    consumption_gdp_share: float = config.CONSUMPTION_GDP_SHARE  # from_data constant (resolve_constants)
+    consumption_gdp_share: float  # from_data constant (resolve_constants)
 
 
 # ---------------------------------------------------------------- assumptions
 
 
+SERIES_FROM_DATA: tuple[str, ...] = ("consumption_nominal", "gdp_nominal")  # inputs of resolve_constants
 CONSUMPTION_SHARE_RANGE = (0.4, 0.7)  # plausibility gate for the computed consumption / GDP ratio
 
 
@@ -156,7 +157,7 @@ def _resolve_details(history: dict[str, pd.DataFrame]) -> dict[str, dict]:
             if np.isfinite(ratio) and lo <= ratio <= hi:
                 return {key: {"value": ratio, "status": "from_data", "year": year, "note": None}}
             why = f"obliczony udział {ratio:.3f} ({year} r.) poza dopuszczalnym zakresem {lo}-{hi}"
-    note = f"Wartość zapasowa z config.py ({fallback}): {why}; stała nie została policzona z danych."
+    note = f"Użyto wartości zapasowej {fallback}: {why}."
     return {key: {"value": fallback, "status": "assumption", "year": None, "note": note}}
 
 

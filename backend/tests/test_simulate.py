@@ -29,6 +29,7 @@ def synthetic_history(n_years: int = 20, seed: int = 5) -> dict[str, pd.DataFram
     gs = 0.4 * nominal_gdp * noise()
     wage_bill = levels["wage_nominal"] * levels["employment"] / 100.0
     hist["gross_surplus"] = pd.DataFrame({"value": gs})
+    hist["gdp_nominal"] = pd.DataFrame({"value": levels["consumption_nominal"] / 0.57})  # synthetic, ratio 0.57
     hist["rev_pit"] = pd.DataFrame({"value": 0.08 * wage_bill * noise()})
     hist["rev_cit"] = pd.DataFrame({"value": 0.03 * gs * noise()})
     hist["rev_vat"] = pd.DataFrame({"value": 0.12 * levels["consumption_nominal"] * noise()})
@@ -332,11 +333,11 @@ def test_consumption_gdp_share_computed_from_history():
 def test_missing_series_falls_back_and_is_reported_as_assumption(model, hist):
     from app.model.simulate import resolve_constants
 
-    assert "gdp_nominal" not in hist
+    hist = {k: v for k, v in hist.items() if k != "gdp_nominal"}
     assert resolve_constants(hist)["CONSUMPTION_GDP_SHARE"] == config.CONSUMPTION_GDP_SHARE
     a = _assumption(simulate(model, hist, defaults(), n_paths=50, seed=0), "CONSUMPTION_GDP_SHARE")
     assert a["status"] == "assumption" and a["value"] == config.CONSUMPTION_GDP_SHARE and a["year"] is None
-    assert "gdp_nominal" in a["note"] and "zapasowa" in a["note"]
+    assert "gdp_nominal" in a["note"] and "zapasowej" in a["note"]
     assert param_meta.PARAMETERS["CONSUMPTION_GDP_SHARE"].status == "from_data"
 
 
@@ -360,3 +361,41 @@ def test_simulate_uses_computed_share_not_config(model, hist):
     d_base = base.macro["pkb_real"]["median"][0] / base.macro["pkb_real"]["baseline"][0] - 1
     d_new = res.macro["pkb_real"]["median"][0] / res.macro["pkb_real"]["baseline"][0] - 1
     assert d_new != pytest.approx(d_base) and abs(d_new) > abs(d_base)  # larger share -> larger GDP response
+
+
+def test_no_common_year_and_zero_or_nan_gdp_fall_back(model, hist):
+    from app.model.simulate import resolve_constants
+
+    cons = hist["consumption_nominal"]
+    disjoint = {"consumption_nominal": cons, "gdp_nominal": pd.DataFrame({"value": [1000.0]}, index=pd.Index([1800], name="year"))}
+    assert resolve_constants(disjoint)["CONSUMPTION_GDP_SHARE"] == config.CONSUMPTION_GDP_SHARE
+    for bad_gdp in (0.0, float("nan")):
+        h = {"consumption_nominal": cons, "gdp_nominal": pd.DataFrame({"value": bad_gdp}, index=cons.index)}
+        assert resolve_constants(h)["CONSUMPTION_GDP_SHARE"] == config.CONSUMPTION_GDP_SHARE
+
+
+def test_api_simulate_and_backtest_use_stored_gdp_nominal(tmp_path):
+    from app.data.dataset import assemble
+    from tests.real_dataset import real_results
+
+    series = assemble(real_results())
+    assert "gdp_nominal" in series
+    store = Store(str(tmp_path / "real.db"))
+    hist = {k: df for k, (_, df) in series.items()}
+    store.save_snapshot(series, synthetic_model_real(hist).to_dict(), {"updated_at": "2026-01-01T00:00:00+00:00", "synthetic": "0"})
+    app.dependency_overrides[get_store] = lambda: store
+    try:
+        client = TestClient(app)
+        r = client.post("/simulate", json={"n_paths": 100, "horizon": 1, "seed": 1})
+        assert r.status_code == 200
+        a = next(x for x in r.json()["assumptions"] if x["key"] == "CONSUMPTION_GDP_SHARE")
+        assert a["status"] == "from_data" and a["year"] == 2024 and a["value"] == pytest.approx(0.563, abs=0.01)
+        assert "zapasowej" not in a["note"]
+        assert client.get("/backtest").status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+def synthetic_model_real(hist):
+    macro = pd.concat({v: hist[v]["value"] for v in MACRO_VARS}, axis=1).dropna()
+    return fit_macro(macro, lags=1)
