@@ -47,6 +47,8 @@ registered in app.model.param_meta are listed in `assumptions` with their status
 
 from dataclasses import dataclass, field, replace
 
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 
@@ -63,7 +65,7 @@ BANDS: dict[str, float] = {"median": 0.5, "p10": 0.1, "p90": 0.9, "p2_5": 0.025,
 # method-choice constants (not parameters of the registry) still listed for transparency
 METHOD_CHOICES: tuple[tuple[str, str], ...] = (
     ("CALIBRATION_YEARS", "Number of most recent years used for the per-tax calibration factors (mean ratio of recorded revenue to module output at current law). Method choice, not a data value."),
-    ("STRUCTURAL_BREAKS", "Structural breaks: series -> first year recorded under new rules; years at or after it are not used for calibration or scored by the backtest."),
+    ("STRUCTURAL_BREAKS", "Structural breaks: series -> first year recorded under new rules. Years >= the break are not used for calibration or scored by the backtest. rev_pit: from 2025 the state budget keeps a much smaller PIT share (local-government financing reform), 2024 97.6 -> 2025 28.75 mld zł (MF reports)."),
 )
 
 # series each module needs: macro bases (store names) + recorded revenue for calibration
@@ -133,7 +135,7 @@ class _Context:
 def parameter_assumptions() -> list[dict]:
     """Registered config constants (param_meta) with status/source, plus the method-choice constants."""
     return param_meta.assumption_rows() + [
-        {"key": k, "value": getattr(config, k), "status": "model-structure", "note": n, "source": "", "year": None, "url": "", "low": None, "high": None}
+        {"key": k, "value": deepcopy(getattr(config, k)), "status": "model-structure", "note": n, "source": "", "year": None, "url": "", "low": None, "high": None}
         for k, n in METHOD_CHOICES
     ]
 
@@ -336,6 +338,10 @@ def simulate(
         {"key": f"calibration.{t}", "value": c["factor"], "status": "calibrated", "note": c["method"] + f" ({c['years'][0]}-{c['years'][-1]})"}
         for t, c in calibration.items()
     ]
+
+    for a in assumptions:  # uniform row shape
+        for k, v in (("source", ""), ("year", None), ("url", ""), ("low", None), ("high", None)):
+            a.setdefault(k, v)
 
     return SimResult(
         years=list(range(model.last_year + 1, model.last_year + 1 + horizon)),

@@ -1,6 +1,6 @@
 import pytest
 
-from app.model import config, param_meta
+from app.model import config
 from app.model.param_meta import PARAMETERS, assumption_rows
 
 KEYS = {
@@ -18,6 +18,15 @@ KEYS = {
     "CONSUMPTION_GDP_SHARE",
     "EMPLOYMENT_GDP_ELASTICITY",
 }
+
+
+def test_every_numeric_config_constant_is_registered():
+    method = {"CALIBRATION_YEARS", "STRUCTURAL_BREAKS"}
+    found = {
+        n for n, v in vars(config).items()
+        if n.isupper() and isinstance(v, (int, float, dict, tuple)) and n not in method
+    }
+    assert found == set(PARAMETERS), found ^ set(PARAMETERS)
 
 
 def test_every_config_constant_has_meta():
@@ -52,4 +61,6 @@ def test_assumption_rows_have_all_keys():
     by_key = {r["key"]: r for r in rows}
     assert by_key["VAT_GAP"]["value"] == config.VAT_GAP
     assert by_key["PIT_INCOME_DIST_DEFAULT"]["value"][0] == [5_000, 3.0]
-    assert param_meta.PARAMETERS["VAT_GAP"].status == by_key["VAT_GAP"]["status"]
+    by_key["PIT_INCOME_DIST_DEFAULT"]["value"][0][0] = -1  # copies, not config internals
+    by_key["VAT_CONSUMPTION_SHARES"]["value"]["standard"] = -1
+    assert config.PIT_INCOME_DIST_DEFAULT[0][0] == 5_000 and config.VAT_CONSUMPTION_SHARES["standard"] == 0.55
