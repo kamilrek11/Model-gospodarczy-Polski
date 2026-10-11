@@ -185,6 +185,16 @@ test.describe("seeded store (synthetic data)", () => {
     expect(pdfBytes.length).toBeGreaterThan(2000);
   });
 
+  test("quality tab shows status badges and sources for model constants", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("metric-row")).toContainText("mld zł");
+    await page.getByRole("tab", { name: "Jakość modelu" }).click();
+    const table = page.getByRole("table", { name: /Stałe i założenia modelu/ });
+    await expect(table.locator(".badge", { hasText: "założenie" }).first()).toBeVisible();
+    await expect(table.locator(".badge", { hasText: "ze źródła" }).first()).toBeVisible();
+    await expect(page.locator(".results")).not.toContainText("PLACEHOLDER");
+  });
+
   test("importing a scenario with an out-of-range value is rejected in Polish", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByLabel(VAT_LABEL, { exact: true })).toBeVisible();

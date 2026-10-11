@@ -149,10 +149,11 @@ button.primary:disabled { opacity: 0.6; cursor: progress; }
 .export-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
 .export-bar .error { flex-basis: 100%; margin: 0; }
 .field { display: flex; flex-direction: column; gap: 0.25rem; }
-.assumptions { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.5rem; }
 .assumption { padding: 0.5rem 0.75rem; border: 1px solid var(--grid); border-radius: 6px; }
 .assumption.placeholder { border-color: var(--warn-border); background: var(--warn-bg); color: var(--warn-fg); }
-.assumption.placeholder small { color: var(--warn-fg); }
+.assumption.placeholder small, .assumption.placeholder a { color: var(--warn-fg); }
+.assumptions-table td, .assumptions-table th { vertical-align: top; text-align: left; }
+.assumptions-table .kv-list { margin: 0; }
 .badge { font-size: 0.75rem; padding: 0.1rem 0.4rem; border: 1px solid var(--grid); border-radius: 4px; margin-left: 0.25rem; }
 .badge-warn { border-color: var(--warn-border); font-weight: 700; }
 .note-list { font-size: 0.85rem; color: var(--text-secondary); padding-left: 1.25rem; }

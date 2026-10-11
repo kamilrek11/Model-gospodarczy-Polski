@@ -26,10 +26,12 @@ MAX_META_TEXT = 64
 
 META_TITLE = "# Metadane"
 SYNTHETIC_NOTE = "DANE SYNTETYCZNE – nie są to dane GUS/MF"
-PLACEHOLDER_SENTENCE = (
-    "Wyniki zależą od niezweryfikowanych stałych orientacyjnych (PLACEHOLDER-UNVERIFIED) wymienionych powyżej; "
+MAX_SOURCE_TEXT = 500
+ASSUMPTION_SENTENCE = (
+    "Wyniki zależą od niezweryfikowanych stałych o statusie „założenie” (brak źródła), wymienionych powyżej; "
     "należy je traktować jako ilustracyjne."
 )
+STATUS_LABEL = {"from_data": "z danych", "sourced": "ze źródła", "assumption": "założenie"}
 
 
 class ExportRequest(BaseModel):
@@ -79,18 +81,25 @@ def meta_rows(result: dict) -> list[list]:
     if synthetic is not None and not isinstance(synthetic, bool):
         raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: synthetic")
     assumptions = result.get("assumptions")
-    if assumptions is None:
-        placeholders = "brak informacji"
-    else:
+    names: list[str] = []
+    constants: list[list] = []
+    if assumptions is not None:
         if not isinstance(assumptions, list) or len(assumptions) > MAX_ASSUMPTIONS:
             raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
-        names = []
         for a in assumptions:
             if not isinstance(a, dict) or not isinstance(a.get("key"), str) or len(a["key"]) > MAX_META_TEXT:
                 raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
-            if a.get("status") == "assumption":
+            status = a.get("status")
+            source, year, url = a.get("source") or "", a.get("year"), a.get("url") or ""
+            if not all(isinstance(t, str) and len(t) <= MAX_SOURCE_TEXT for t in (source, url)) or not (year is None or (isinstance(year, int) and not isinstance(year, bool))):
+                raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
+            if status == "assumption":
                 names.append(a["key"])
-        placeholders = ", ".join(names) if names else "brak"
+            if status in STATUS_LABEL:
+                parts = [STATUS_LABEL[status], source, "" if year is None else str(year), url]
+                while parts and parts[-1] == "":
+                    parts.pop()
+                constants.append([f"stala_{a['key']}", "; ".join(parts)])
     rows = [
         ["dane_z", _meta_text(result, "data_updated_at")],
         ["wersja_modelu", _meta_text(result, "model_version")],
@@ -98,11 +107,11 @@ def meta_rows(result: dict) -> list[list]:
     ]
     if synthetic:
         rows.append(["uwaga", SYNTHETIC_NOTE])
-    rows += [
-        ["wygenerowano", datetime.now(UTC).isoformat(timespec="seconds")],
-        ["zalozenia_niezweryfikowane", placeholders],
-        ["zastrzezenie", PLACEHOLDER_SENTENCE],
-    ]
+    rows.append(["wygenerowano", datetime.now(UTC).isoformat(timespec="seconds")])
+    rows.append(["zalozenia_niezweryfikowane", "brak informacji" if assumptions is None else (", ".join(names) if names else "brak")])
+    rows += constants
+    if names:
+        rows.append(["zastrzezenie", f"{ASSUMPTION_SENTENCE} Założenia: {', '.join(names)}."])
     return rows
 
 
