@@ -3,6 +3,9 @@ services:
     build: ./backend
     environment:
       BUDGET_DB_PATH: /data/budget.db
+      BUDGET_CACHE_DIR: /data/cache
+      # POST /api/refresh has no authentication and nginx exposes it: set REFRESH_DISABLED=1 for any exposed instance
+      REFRESH_DISABLED: "${REFRESH_DISABLED:-0}"
     volumes:
       - budget-data:/data
     healthcheck:

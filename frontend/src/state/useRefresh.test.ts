@@ -93,6 +93,45 @@ describe("useRefresh polling", () => {
     expect(result.current.status?.state).toBe("failed");
   });
 
+  it("403 from POST /refresh (refresh disabled) marks the status disabled with the server message", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push(`${init?.method ?? "GET"} ${url}`);
+        return init?.method === "POST"
+          ? new Response(JSON.stringify({ detail: "odświeżanie wyłączone w tej instancji" }), { status: 403 })
+          : new Response(JSON.stringify({ state: "idle", errors: {}, updated_at: null }), { status: 200 });
+      }),
+    );
+    const { result } = renderHook(() => useRefresh(vi.fn()));
+    await act(async () => {});
+    await act(async () => result.current.start());
+    expect(result.current.status?.state).toBe("failed");
+    expect(result.current.status?.disabled).toBe(true);
+    expect(result.current.status?.errors).toEqual({ refresh: "odświeżanie wyłączone w tej instancji" });
+    const n = statusCalls(calls);
+    await act(async () => vi.advanceTimersByTimeAsync(POLL_MS * 3));
+    expect(statusCalls(calls)).toBe(n); // no polling: no job was started
+  });
+
+  it("a 403 with another detail (e.g. a proxy) is a failure, not 'refresh disabled'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        init?.method === "POST"
+          ? new Response("<html>403 Forbidden</html>", { status: 403 })
+          : new Response(JSON.stringify({ state: "idle", errors: {}, updated_at: null }), { status: 200 }),
+      ),
+    );
+    const { result } = renderHook(() => useRefresh(vi.fn()));
+    await act(async () => {});
+    await act(async () => result.current.start());
+    expect(result.current.status?.state).toBe("failed");
+    expect(result.current.status?.disabled).not.toBe(true);
+    expect(result.current.status?.errors.refresh).toContain("403");
+  });
+
   it("two synchronous start() calls send exactly one POST", async () => {
     const calls = mockFetch([{ state: "idle" }, { state: "running" }]);
     const { result } = renderHook(() => useRefresh(vi.fn()));

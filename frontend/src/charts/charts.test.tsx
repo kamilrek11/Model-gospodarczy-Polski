@@ -120,6 +120,38 @@ describe("ForecastVsActual", () => {
   });
 });
 
+describe("ForecastVsActual structural break note", () => {
+  const breakAssumption = { key: "structure.break.rev_pit", value: 2025, status: "model-structure", note: "x" };
+  const simBreak = { ...sim, assumptions: [...sim.assumptions, breakAssumption] };
+
+  it("shows a short Polish note on the PIT chart when the break year is in the chart", () => {
+    render(<ForecastVsActual tax="pit" history={history} sim={simBreak} />);
+    const note = screen.getByTestId("break-note");
+    expect(note).toHaveTextContent("Od 2025 r.");
+    expect(note).toHaveTextContent("JST");
+    expect(note).toHaveTextContent("nie jest porównywalne z prognozą");
+  });
+
+  it("draws a reference line at the break year in the svg", () => {
+    const spy = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(600);
+    const { container } = render(<ForecastVsActual tax="pit" history={history} sim={simBreak} />);
+    expect(container.querySelector(".recharts-reference-line")).not.toBeNull();
+    spy.mockRestore();
+  });
+
+  it("no note for other taxes, without a declared break or when the break year is not shown", () => {
+    const { unmount } = render(<ForecastVsActual tax="vat" history={history} sim={simBreak} />);
+    expect(screen.queryByTestId("break-note")).toBeNull();
+    unmount();
+    const r2 = render(<ForecastVsActual tax="pit" history={history} sim={sim} />);
+    expect(screen.queryByTestId("break-note")).toBeNull();
+    r2.unmount();
+    const later = { ...sim, assumptions: [{ ...breakAssumption, value: 2040 }] };
+    render(<ForecastVsActual tax="pit" history={history} sim={later} />);
+    expect(screen.queryByTestId("break-note")).toBeNull();
+  });
+});
+
 describe("BudgetStack", () => {
   it("BudgetStack legend toggles series", async () => {
     render(<BudgetStack sim={sim} history={history} />);

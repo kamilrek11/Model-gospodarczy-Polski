@@ -103,3 +103,17 @@ export function buildStackRows(history: HistoryData, sim: SimulationResult, hidd
   }
   return [...byYear.values()].sort((a, b) => a.year - b.year);
 }
+
+/** Rok załamania strukturalnego serii rev_<tax> (założenie `structure.break.rev_<tax>` z /simulate) lub null. */
+export function structuralBreakYear(sim: SimulationResult, tax: TaxKey): number | null {
+  const a = sim.assumptions?.find((x) => x.key === `structure.break.rev_${tax}`);
+  return a && typeof a.value === "number" && Number.isFinite(a.value) ? a.value : null;
+}
+
+/** Krótka notka pod wykresem; PIT ma własny tekst (reforma finansowania JST od 2025 r.). */
+export function breakNote(tax: TaxKey, year: number): string {
+  if (tax === "pit") {
+    return `Od ${year} r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania JST) – wykonanie od ${year} r. nie jest porównywalne z prognozą liczoną według wcześniejszych zasad.`;
+  }
+  return `Od ${year} r. zmiana zasad (załamanie strukturalne) – wykonanie od ${year} r. nie jest porównywalne z prognozą.`;
+}

@@ -15,7 +15,11 @@ export function DataInfo({ updatedAt, modelVersion, status, onRefresh }: Props) 
     <div className="data-info">
       <span>Dane z: {updatedAt ? fmtDate(updatedAt) : "brak"}</span>
       {modelVersion && <span title={`Wersja modelu ${modelVersion}`}>model {modelVersion.slice(0, 7)}</span>}
-      {status?.state === "failed" && <span className="refresh-failed">odświeżenie nieudane</span>}
+      {status?.disabled ? (
+        <span className="refresh-failed">odświeżanie wyłączone</span>
+      ) : (
+        status?.state === "failed" && <span className="refresh-failed">odświeżenie nieudane</span>
+      )}
       <RefreshButton status={status} onRefresh={onRefresh} />
     </div>
   );

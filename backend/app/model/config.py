@@ -93,11 +93,11 @@ CONSUMPTION_GDP_SHARE: float = 0.57
 # PLACEHOLDER-UNVERIFIED: illustrative value, no literature source verified.
 EMPLOYMENT_GDP_ELASTICITY: float = 0.5
 
-# Conversion of the stored consumption_nominal series to mld zł (used only to scale the
-# PIT disposable-income channel; tax levels are calibrated and do not depend on it).
-# PLACEHOLDER-UNVERIFIED: the unit of the BDL series is not verified (see series_map).
-CONSUMPTION_SERIES_TO_MLD_ZL: float = 1.0
-
 # Number of most recent years used for the per-tax calibration factors (mean ratio of
 # recorded revenue to module output at current law). Method choice, not a data value.
 CALIBRATION_YEARS: int = 3
+
+# Structural breaks: series -> first year recorded under new rules. Years >= the break are not used
+# for calibration or scored by the backtest. rev_pit: from 2025 the state budget keeps a much smaller
+# PIT share (local-government financing reform), 2024 97.6 -> 2025 28.75 mld zł (MF reports).
+STRUCTURAL_BREAKS: dict[str, int] = {"rev_pit": 2025}

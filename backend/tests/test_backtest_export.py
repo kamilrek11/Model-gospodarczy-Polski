@@ -53,7 +53,7 @@ def test_backtest_coverage_between_0_and_1():
 
 
 def test_backtest_not_enough_data_returns_message():
-    res = backtest(synthetic_history(14), horizon=3, min_train=12)
+    res = backtest(synthetic_history(14), horizon=3)
     assert res.mape == {} and res.coverage80 == {} and res.coverage95 == {}
     assert res.message
 
@@ -168,11 +168,31 @@ def test_export_malformed_body_422(client, body):
     assert c.post("/export?format=csv", json=body).status_code == 422
 
 
-def test_backtest_reports_skipped_origins():
-    res = backtest(synthetic_history(22), horizon=2, min_train=12)  # origins with 12-14 obs cannot be fitted
-    assert res.n_skipped == 3 and res.n_origins > 0
-    assert any("Pominięto 3" in n for n in res.notes)
-    assert backtest(synthetic_history(22), horizon=2, min_train=15).n_skipped == 0
+def test_backtest_min_train_never_below_min_obs_so_nothing_is_skipped_spuriously():
+    from app.model.macro import MIN_OBS
+
+    default = backtest(synthetic_history(22), horizon=2)
+    assert default.n_skipped == 0 and default.n_origins > 0
+    assert not any("Pominięto" in n for n in default.notes)
+    low = backtest(synthetic_history(22), horizon=2, min_train=12)  # clamped to MIN_OBS
+    assert low == default and MIN_OBS == 15
+
+
+def test_backtest_reports_skipped_origins_on_real_fit_failures(monkeypatch):
+    import app.model.backtest as bt_mod
+
+    real_fit, calls = bt_mod.fit_macro, {"n": 0}
+
+    def flaky(*a, **k):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise np.linalg.LinAlgError("singular matrix")
+        return real_fit(*a, **k)
+
+    monkeypatch.setattr(bt_mod, "fit_macro", flaky)
+    res = backtest(synthetic_history(22), horizon=2)
+    assert res.n_skipped == 2 and res.n_origins > 0
+    assert any("Pominięto 2" in n for n in res.notes)
 
 
 @pytest.mark.parametrize("fmt", ["csv", "xlsx"])
@@ -204,3 +224,33 @@ def test_export_csv_guards_all_formula_prefixes(client, prefix):
     hist, model = fill(store)
     r = c.post("/export?format=csv", json={"params": {}, "result": sim_result(hist, model), "name": prefix + "cmd"})
     assert ("'" + prefix + "cmd") in r.content.decode("utf-8-sig")
+
+
+def test_backtest_skips_pit_targets_from_break_year_and_notes_it():
+    from app.data.dataset import assemble
+    from app.model.backtest import NOTE_PIT_BREAK
+    from tests.real_dataset import real_results
+
+    data = {k: df for k, (_, df) in assemble(real_results()).items()}
+    assert data["rev_pit"].index.max() == 2025
+    res = backtest(data, horizon=2)
+    assert "pit" in res.mape and res.message is None
+    assert NOTE_PIT_BREAK in res.notes
+    assert NOTE_PIT_BREAK.startswith("PIT w budżecie państwa: zmiana zasad podziału od 2025 r.")
+
+    # PIT 2025 is never scored: any value there gives exactly the same PIT metrics as no value at all
+    without = dict(data)
+    without["rev_pit"] = data["rev_pit"].loc[:2024]
+    ref = backtest(without, horizon=2)
+    assert NOTE_PIT_BREAK not in ref.notes  # nothing skipped -> no note
+    for v in (1e-3, 1e4):
+        odd = dict(data)
+        pit = data["rev_pit"].copy()
+        pit.loc[2025, "value"] = v
+        odd["rev_pit"] = pit
+        r = backtest(odd, horizon=2)
+        assert (r.mape["pit"], r.coverage80["pit"], r.coverage95["pit"]) == (ref.mape["pit"], ref.coverage80["pit"], ref.coverage95["pit"])
+    # other taxes keep their 2025 targets
+    vat_without = dict(data)
+    vat_without["rev_vat"] = data["rev_vat"].loc[:2024]
+    assert backtest(vat_without, horizon=2).mape["vat"] != res.mape["vat"]

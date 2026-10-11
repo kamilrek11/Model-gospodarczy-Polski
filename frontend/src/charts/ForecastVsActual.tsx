@@ -1,9 +1,9 @@
-import { Area, CartesianGrid, ComposedChart, Line, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import type { HistoryData, SimulationResult, TaxKey } from "../api/types";
 import { DataTable } from "../components/DataTable";
 import { fmtAxis, fmtMld, fmtPct, fmtSignedMld } from "../format";
 import { ChartFrame } from "./ChartFrame";
-import { bridgeForecast, buildForecastSeries, changeVsBaseline } from "./data";
+import { breakNote, bridgeForecast, buildForecastSeries, changeVsBaseline, structuralBreakYear } from "./data";
 import { INK, TAX_COLOR, TAX_LABEL, TAX_ORDER } from "./palette";
 
 interface Props {
@@ -21,6 +21,10 @@ export function ForecastVsActual({ tax, history, sim, onTaxChange }: Props) {
   const color = TAX_COLOR[tax];
   const name = TAX_LABEL[tax];
   const chartRows = bridgeForecast(rows);
+  const breakYear = structuralBreakYear(sim, tax);
+  // notka, gdy wykres obejmuje lata od załamania; linia tylko, gdy sam rok załamania jest na osi
+  const showBreak = breakYear !== null && rows.some((r) => r.year >= breakYear);
+  const breakOnAxis = showBreak && rows.some((r) => r.year === breakYear);
 
   const metric = (label: string, delta: number, pct: number | null) => (
     <div className="metric">
@@ -74,9 +78,23 @@ export function ForecastVsActual({ tax, history, sim, onTaxChange }: Props) {
             <Area type="monotone" dataKey="band80" name="Pasmo 80%" stroke="none" fill={color} fillOpacity={0.24} isAnimationActive={false} />
             <Line type="monotone" dataKey="actual" name="Wykonanie" stroke={color} strokeWidth={2} dot={{ r: 4, stroke: INK.surface, strokeWidth: 2, fill: color }} isAnimationActive={false} connectNulls />
             <Line type="monotone" dataKey="median" name="Prognoza (mediana)" stroke={color} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} connectNulls />
+            {breakOnAxis && (
+              <ReferenceLine
+                x={breakYear!}
+                stroke={INK.secondary}
+                strokeDasharray="2 3"
+                label={{ value: `zmiana zasad ${breakYear}`, position: "insideTopLeft", fill: INK.secondary, fontSize: 11 }}
+              />
+            )}
           </ComposedChart>
         )}
       </ChartFrame>
+
+      {showBreak && (
+        <p className="note" data-testid="break-note">
+          {breakNote(tax, breakYear!)}
+        </p>
+      )}
 
       <ul className="key" aria-label="Legenda wykresu">
         <li><span className="key-line" style={{ borderTopColor: color }} /> Wykonanie</li>

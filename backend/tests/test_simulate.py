@@ -244,3 +244,61 @@ def test_simulate_endpoint_returns_full_response(client_with):
     assert isinstance(body["model_version"], str) and len(body["model_version"]) == 12
     again = client.post("/simulate", json={"params": {"vat_rate_standard": 0.24}, "n_paths": 300, "seed": 7}).json()
     assert again == body
+
+
+# ---------------------------------------------------------------- real data: 2025 PIT structural break
+
+PIT_BREAK_NOTE = (
+    "PIT w budżecie państwa: zmiana zasad podziału od 2025 r. (reforma finansowania JST); kalibracja do 2024; "
+    "wykonanie 2025 nie jest porównywalne z prognozą przy dotychczasowych zasadach."
+)
+
+
+def real_history_with_2025_bases() -> tuple[MacroModel, dict[str, pd.DataFrame]]:
+    """REAL recorded series (tests/real_dataset.py), assembled. Employment is extended to 2025 with its 2024
+    level (test-only, so that PIT 2025 would fall inside the last-3-years window without the break rule)."""
+    from app.data.dataset import assemble
+    from tests.real_dataset import real_results
+
+    hist = {k: df for k, (_, df) in assemble(real_results()).items()}
+    emp = hist["employment"]
+    hist["employment"] = pd.concat([emp, pd.DataFrame({"value": [emp["value"].iloc[-1]]}, index=pd.Index([2025], name="year"))])
+    macro = pd.concat({v: hist[v]["value"] for v in MACRO_VARS}, axis=1).dropna()
+    return fit_macro(macro.loc[:2024], lags=1), hist
+
+
+def test_calibration_years_cut_series_at_structural_break():
+    from app.model.simulate import calibration_years
+
+    assert config.STRUCTURAL_BREAKS == {"rev_pit": 2025}
+    assert calibration_years("rev_pit", [2022, 2023, 2024, 2025, 2026]) == [2022, 2023, 2024]
+    assert calibration_years("rev_vat", [2023, 2024, 2025]) == [2023, 2024, 2025]
+
+
+def test_calibration_ignores_pit_years_from_2025():
+    model, hist = real_history_with_2025_bases()
+    assert hist["rev_pit"].loc[2025, "value"] == pytest.approx(28.75211501)
+    res = simulate(model, hist, defaults(), horizon=1, n_paths=50, seed=0)
+    cal = res.calibration["pit"]
+    assert max(cal["years"]) <= 2024 and len(cal["years"]) == 3
+    assert cal["years"] == [2018, 2023, 2024]  # recorded MF years before the break
+
+    # the 2025 value has no influence at all on the factor
+    for v in (1e-3, 500.0):
+        other = dict(hist)
+        pit = hist["rev_pit"].copy()
+        pit.loc[2025, "value"] = v
+        other["rev_pit"] = pit
+        assert simulate(model, other, defaults(), horizon=1, n_paths=50, seed=0).calibration["pit"]["factor"] == cal["factor"]
+    # other taxes still use 2025 (no break declared for them)
+    assert 2025 in res.calibration["vat"]["years"]
+
+
+def test_assumptions_contain_pit_break_note(model, hist):
+    res = simulate(model, hist, defaults(), n_paths=50, seed=0)
+    notes = {a["key"]: a for a in res.assumptions}
+    assert any(a["note"] == PIT_BREAK_NOTE for a in res.assumptions)
+    assert notes["STRUCTURAL_BREAKS"]["value"] == {"rev_pit": 2025}
+    # all sources now deliver mld zł; the unit is enforced by the dataset gate, not by a placeholder factor
+    assert "CONSUMPTION_SERIES_TO_MLD_ZL" not in notes
+    assert not hasattr(config, "CONSUMPTION_SERIES_TO_MLD_ZL")

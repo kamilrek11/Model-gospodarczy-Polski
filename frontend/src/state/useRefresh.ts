@@ -68,6 +68,12 @@ export function useRefresh(onDone: () => void): UseRefresh {
       await startRefresh();
     } catch (e) {
       // Backend zwraca 409 wyłącznie, gdy zadanie już trwa (api/refresh.py) – to nie błąd, tylko dołączamy do odpytywania.
+      if (e instanceof ApiError && e.kind === "disabled") {
+        // 403: odświeżanie wyłączone w tej instancji – żadne zadanie nie ruszyło, nie odpytujemy
+        busy.current = false;
+        if (alive.current) setStatus((s) => ({ state: "failed", errors: { refresh: e.message }, updated_at: s?.updated_at ?? null, synthetic: s?.synthetic, disabled: true }));
+        return;
+      }
       if (!(e instanceof ApiError && e.kind === "no-data")) {
         busy.current = false;
         if (alive.current) setStatus({ state: "failed", errors: { refresh: e instanceof Error ? e.message : "Błąd uruchomienia odświeżenia" }, updated_at: null });

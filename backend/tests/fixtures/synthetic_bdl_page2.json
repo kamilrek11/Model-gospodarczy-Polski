@@ -1,5 +1,0 @@
-{"_note": "SYNTHETIC, hand-built to mimic BDL shape; NOT real data",
- "totalRecords": 3, "page": 1, "pageSize": 2, "links": {},
- "results": [
-  {"id": "000000000000", "name": "Polska", "values": [{"year": "2022", "val": 125.0, "attrId": 1}]}
- ]}

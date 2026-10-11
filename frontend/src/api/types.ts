@@ -86,13 +86,17 @@ export interface SimulateRequest {
   seed?: number;
 }
 
-export type ApiErrorKind = "no-data" | "invalid" | "network" | "server";
+export type ApiErrorKind = "no-data" | "invalid" | "network" | "server" | "disabled";
 
 export interface RefreshStatus {
   state: "idle" | "running" | "done" | "failed";
   errors: Record<string, string>;
   updated_at: string | null;
   synthetic?: boolean;
+  /** Ostrzeżenia źródeł z ostatniego odświeżenia (np. nieobsłużony rok MF) – nie są błędem. */
+  warnings?: string[];
+  /** Odświeżanie wyłączone w tej instancji (REFRESH_DISABLED=1). */
+  disabled?: boolean;
 }
 
 /** GET /backtest – MAPE w %, pokrycie jako ułamek (0-1), klucze = podatki. */

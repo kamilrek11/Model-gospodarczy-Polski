@@ -10,6 +10,8 @@ export class ApiError extends Error {
 }
 
 const BASE = "/api";
+/** `detail` odpowiedzi 403 backendu, gdy odświeżanie jest wyłączone (api/refresh.py MSG_DISABLED). */
+export const MSG_DISABLED_DETAIL = "odświeżanie wyłączone w tej instancji";
 
 async function detailOf(res: Response, fallback: string): Promise<string> {
   try {
@@ -30,6 +32,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError("network", "Brak połączenia z serwerem");
   }
   if (res.ok) return (await res.json()) as T;
+  if (res.status === 403) {
+    // tylko odpowiedź backendu z REFRESH_DISABLED oznacza „wyłączone”; inne 403 (np. proxy) to zwykły błąd
+    const detail = await detailOf(res, "");
+    if (detail === MSG_DISABLED_DETAIL) throw new ApiError("disabled", detail);
+    throw new ApiError("server", detail || `Brak dostępu (${res.status})`);
+  }
   if (res.status === 409) throw new ApiError("no-data", await detailOf(res, "brak danych – uruchom odświeżenie"));
   if (res.status === 422) throw new ApiError("invalid", await detailOf(res, "Nieprawidłowe parametry"));
   throw new ApiError("server", await detailOf(res, `Błąd serwera (${res.status})`));

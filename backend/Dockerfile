@@ -10,7 +10,8 @@ RUN pip install --no-cache-dir $(python -c "import tomllib;print(' '.join(tomlli
 
 COPY app ./app
 
-RUN useradd --system --uid 10001 --no-create-home app && mkdir -p /data && chown app /data
+# /data/cache: MF report cache (BUDGET_CACHE_DIR), so a refresh does not re-download ~210 MB each time
+RUN useradd --system --uid 10001 --no-create-home app && mkdir -p /data/cache && chown -R app /data
 USER app
 VOLUME /data
 EXPOSE 8000

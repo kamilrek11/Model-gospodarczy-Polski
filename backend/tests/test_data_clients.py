@@ -1,129 +1,18 @@
-import json
+import importlib
 from pathlib import Path
 
-import httpx
-import pandas as pd
 import pytest
 
-from app.data.base import SourceError
-from app.data.execution import ExecutionClient, HttpJsonLoader
-from app.data.gus_bdl import GusBdlClient
 
-FIX = Path(__file__).parent / "fixtures"
-BASE = "https://bdl.test/api/v1"
-# test-only mapping with fake ids matching the synthetic fixtures
-TEST_MAP = {"pkb_real": {"var_id": "9001", "unit": "Polska"}}
+def test_execution_placeholder_module_is_gone():
+    """The budget-execution placeholder (app.data.execution) was replaced by app.data.mf_execution,
+    which refresh.get_clients now wires in."""
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("app.data.execution")
 
 
-def load(name):
-    return json.loads((FIX / name).read_text(encoding="utf-8"))
+def test_series_map_has_no_placeholder_endpoints():
+    import app.data.series_map as series_map
 
-
-def client(handler, series_map=TEST_MAP):
-    http = httpx.Client(transport=httpx.MockTransport(handler))
-    return GusBdlClient(BASE, http, series_map=series_map)
-
-
-def paged(request):
-    page = request.url.params.get("page", "0")
-    return httpx.Response(200, json=load("synthetic_bdl_page1.json" if page == "0" else "synthetic_bdl_page2.json"))
-
-
-def test_gus_client_parses_series():
-    seen = []
-    def h(req):
-        seen.append(req)
-        return httpx.Response(200, json=load("synthetic_bdl_page2.json"))
-    out = client(h).fetch()
-    df = out["pkb_real"]
-    assert list(df.index) == [2022] and df.index.name == "year"
-    assert df["value"].iloc[0] == 125.0
-    assert "/data/by-variable/9001" in str(seen[0].url)
-
-
-def test_gus_client_raises_source_error_on_http_500():
-    with pytest.raises(SourceError) as e:
-        client(lambda r: httpx.Response(500)).fetch()
-    assert e.value.source == "gus_bdl"
-
-
-def test_gus_client_raises_on_429_and_timeout():
-    with pytest.raises(SourceError):
-        client(lambda r: httpx.Response(429)).fetch()
-    def boom(r):
-        raise httpx.ConnectTimeout("t")
-    with pytest.raises(SourceError) as e:
-        client(boom).fetch()
-    assert e.value.source == "gus_bdl"
-
-
-def test_gus_client_paginates():
-    df = client(paged).fetch()["pkb_real"]
-    assert list(df.index) == [2020, 2021, 2022]
-    assert list(df["value"]) == [100.0, 110.0, 125.0]  # national unit only
-
-
-def test_gus_client_unmapped_series_raises():
-    c = client(paged, series_map=None)  # default placeholder map
-    with pytest.raises(SourceError, match="series not mapped"):
-        c.fetch()
-
-
-def test_gus_client_missing_national_unit_raises():
-    body = load("synthetic_bdl_page2.json")
-    body["results"][0]["name"] = "MAZOWIECKIE"
-    with pytest.raises(SourceError):
-        client(lambda r: httpx.Response(200, json=body)).fetch()
-
-
-def test_execution_client_parses():
-    def h(req):
-        return httpx.Response(200, json=load("synthetic_execution.json"))
-    http = httpx.Client(transport=httpx.MockTransport(h))
-    loader = HttpJsonLoader({"rev_pit": "https://x.test/pit"}, http)
-    out = ExecutionClient(loader, series=("rev_pit",)).fetch()
-    assert out["rev_pit"]["value"].tolist() == [70.5, 75.25]
-    assert isinstance(out["rev_pit"], pd.DataFrame)
-
-
-def test_execution_client_errors_and_unmapped():
-    http = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(503)))
-    with pytest.raises(SourceError) as e:
-        ExecutionClient(HttpJsonLoader({"rev_pit": "https://x.test/pit"}, http), series=("rev_pit",)).fetch()
-    assert e.value.source == "execution"
-    with pytest.raises(SourceError, match="series not mapped"):
-        ExecutionClient(HttpJsonLoader({}, http), series=("rev_pit",)).fetch()
-    with pytest.raises(SourceError, match="series not mapped"):
-        ExecutionClient(HttpJsonLoader({"rev_pit": "TODO_VERIFY_URL"}, http), series=("rev_pit",)).fetch()
-
-
-def test_gus_client_malformed_bodies_raise_source_error():
-    good = load("synthetic_bdl_page2.json")
-    bad_val = json.loads(json.dumps(good)); bad_val["results"][0]["values"][0]["val"] = "abc"
-    bad_year = json.loads(json.dumps(good)); del bad_year["results"][0]["values"][0]["year"]
-    bad_year2 = json.loads(json.dumps(good)); bad_year2["results"][0]["values"][0]["year"] = "x"
-    bad_results = {"results": "nope"}
-    for body in (bad_val, bad_year, bad_year2, bad_results, [1, 2]):
-        with pytest.raises(SourceError) as e:
-            client(lambda r, b=body: httpx.Response(200, json=b)).fetch()
-        assert e.value.source == "gus_bdl"
-
-
-def test_gus_client_empty_series_raises():
-    body = load("synthetic_bdl_page2.json")
-    body["results"][0]["values"] = [{"year": "2022", "val": None, "attrId": 1}]
-    with pytest.raises(SourceError, match="no data"):
-        client(lambda r: httpx.Response(200, json=body)).fetch()
-
-
-def test_gus_client_unit_match_case_insensitive():
-    body = load("synthetic_bdl_page2.json")
-    body["results"][0]["name"] = "POLSKA"
-    assert list(client(lambda r: httpx.Response(200, json=body)).fetch()["pkb_real"].index) == [2022]
-
-
-def test_execution_client_empty_series_raises():
-    http = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"rows": []})))
-    with pytest.raises(SourceError, match="no data") as e:
-        ExecutionClient(HttpJsonLoader({"rev_pit": "https://x.test/pit"}, http), series=("rev_pit",)).fetch()
-    assert e.value.source == "execution"
+    assert not hasattr(series_map, "EXECUTION_ENDPOINTS")
+    assert "TODO_VERIFY" not in Path(series_map.__file__).read_text(encoding="utf-8")
