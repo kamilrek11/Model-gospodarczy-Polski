@@ -19,7 +19,7 @@ describe("QualityTab with real backend assumptions", () => {
 
     const item = (key: string) => screen.getByText(key, { selector: "code" }).closest("li")!;
     // scalar
-    expect(item("VAT_GAP")).toHaveTextContent("= 0,07");
+    expect(item("VAT_GAP")).toHaveTextContent("= 0,109");
     // dict -> compact key: value list
     const shares = item("VAT_CONSUMPTION_SHARES");
     expect(shares).toHaveTextContent("standard: 0,55");

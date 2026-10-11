@@ -5,6 +5,8 @@ PLACEHOLDER-UNVERIFIED means the number is a rough, order-of-magnitude assumptio
 that has NOT been checked against a published source and must be replaced
 (or confirmed) before results are presented as anything but illustrative.
 Tax functions stay pure: callers pass these values in as arguments.
+Status, source, year and uncertainty range of every constant: docs/model-parameters.md
+(machine-readable copy: app/model/param_meta.py).
 """
 
 # ---------------------------------------------------------------- VAT
@@ -20,10 +22,11 @@ VAT_CONSUMPTION_SHARES: dict[str, float] = {
     "zero": 0.18,
 }
 
-# VAT compliance gap as a fraction of theoretical revenue.
-# PLACEHOLDER-UNVERIFIED: order of magnitude only; replace with the latest
-# VAT gap estimate for Poland (e.g. the European Commission VAT Gap report) after verification.
-VAT_GAP: float = 0.07
+# VAT compliance gap as a fraction of theoretical revenue (VTTL).
+# Source: European Commission, "VAT gap in Europe - report 2025", tables (xlsx), Table 205: Poland 2024
+# fast estimate 10.9% (full estimates: 2021 4.8%, 2022 11.2%, 2023 16.0%). See docs/model-parameters.md.
+# The term is purely multiplicative and is absorbed by the VAT calibration factor.
+VAT_GAP: float = 0.109
 
 # Price elasticity of real consumption demand w.r.t. the consumer price (gross of VAT).
 # Assumes full pass-through of VAT changes to consumer prices.
@@ -33,8 +36,9 @@ VAT_PRICE_ELASTICITY: float = -0.5
 # ---------------------------------------------------------------- CIT
 
 # Share of the CIT tax base attributable to small taxpayers (9% rate).
-# PLACEHOLDER-UNVERIFIED: should come from MF CIT-8 aggregate statistics.
-CIT_SMALL_TAXPAYER_SHARE: float = 0.10
+# Source: MF "Informacja dotycząca rozliczenia podatku CIT za 2021 r." (dane.gov.pl dataset 162): tax due at 9%
+# 2 700 278 tys. zł, at 19% 65 220 084 tys. zł -> base share 30.0 / (30.0 + 343.3) = 8.0%. See docs/model-parameters.md.
+CIT_SMALL_TAXPAYER_SHARE: float = 0.08
 
 # ---------------------------------------------------------------- PIT
 
@@ -63,10 +67,12 @@ PIT_INCOME_DIST_DEFAULT: tuple[tuple[float, float], ...] = (
 # Split of non-agricultural business income by taxation form (shares sum to 1).
 # scale -> taxed on the scale together with wages, flat -> pit_flat_rate,
 # lump -> pit_lump_rate_default applied to revenue (see PIT_LUMP_REVENUE_TO_INCOME).
-# PLACEHOLDER-UNVERIFIED: rough split.
-PIT_BUSINESS_SCALE_SHARE: float = 0.35
-PIT_BUSINESS_FLAT_SHARE: float = 0.40
-PIT_BUSINESS_LUMP_SHARE: float = 0.25
+# Source (2021): MF "Informacja dotycząca rozliczenia PIT za 2021 r." - business income on the scale 43 450 mln zł,
+# PIT-36L business income 228 957 mln zł; MF "Informacja dotycząca ryczałtu ... za 2021 r." - business revenue
+# 89 466 mln zł converted to income with PIT_LUMP_REVENUE_TO_INCOME (an assumption). See docs/model-parameters.md.
+PIT_BUSINESS_SCALE_SHARE: float = 0.14
+PIT_BUSINESS_FLAT_SHARE: float = 0.72
+PIT_BUSINESS_LUMP_SHARE: float = 0.14
 
 # Ratio of recorded revenue (ryczałt base) to income for lump-sum taxpayers.
 # PLACEHOLDER-UNVERIFIED: illustrative value.
@@ -74,8 +80,9 @@ PIT_LUMP_REVENUE_TO_INCOME: float = 2.0
 
 # Non-agricultural business income (PIT base outside wages) as a ratio to the wage bill.
 # No business-income series is loaded, so the projection ties it to the wage bill.
-# PLACEHOLDER-UNVERIFIED: illustrative ratio; should come from MF PIT statistics.
-PIT_BUSINESS_INCOME_TO_WAGE_BILL: float = 0.25
+# Source (2021): business income as above (317.1 mld zł) / model wage bill 2021 (GUS BDL wage x employment x 12
+# = 783.1 mld zł). See docs/model-parameters.md.
+PIT_BUSINESS_INCOME_TO_WAGE_BILL: float = 0.40
 
 # ---------------------------------------------------------------- second round (macro feedback)
 
@@ -86,7 +93,8 @@ HOUSEHOLD_MPC: float = 0.6
 
 # Share of private consumption in GDP: a relative change of real consumption x moves
 # real GDP by CONSUMPTION_GDP_SHARE * x (no import leakage or offsets modelled).
-# PLACEHOLDER-UNVERIFIED: order of magnitude only; should come from GUS national accounts.
+# Status from_data (docs/model-parameters.md): consumption_nominal / gdp_nominal of the last common year
+# (2024: 0.563); this value is only the fallback when those series are missing.
 CONSUMPTION_GDP_SHARE: float = 0.57
 
 # Elasticity of employment w.r.t. real GDP (short-run, Okun-type).
