@@ -160,8 +160,9 @@ PIT według zasad sprzed reformy):
 | 2029 | 272,30 | 54,51 |
 
 Pasmo p10–p90: 2025 132,55–150,82 → 21,91–37,10; szerokość pasma 2026 37,55 → 18,63 (2029: 143,02 → 39,36). Po
-uwzględnieniu udziału mediana 2025 leży blisko wykonania (28,75), a pasma są wielokrotnie węższe, bo skalowanie
-obejmuje także rozrzut poziomu.
+uwzględnieniu udziału mediana 2025 leży blisko wykonania (28,75). Pasma są węższe w wartościach bezwzględnych (skala PIT
+w budżecie państwa jest mniejsza), ale **szersze względem mediany** (2026: z ok. 22% do ok. 55% mediany), bo `ε`
+dodaje rozrzut poziomu udziału.
 
 **Ograniczenia.** (1) s₀ jest kalibrowany na **jednym roku** (2025) i zawiera błąd prognozy modułu na ten rok;
 nie ma serii, z której dałoby się ocenić jego stabilność w czasie. (2) Mnożnik m skaluje PIT sprzed reformy, gdy brak
