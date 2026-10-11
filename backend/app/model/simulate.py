@@ -76,7 +76,7 @@ BANDS: dict[str, float] = {"median": 0.5, "p10": 0.1, "p90": 0.9, "p2_5": 0.025,
 # method-choice constants (not parameters of the registry) still listed for transparency
 METHOD_CHOICES: tuple[tuple[str, str], ...] = (
     ("CALIBRATION_YEARS", "Liczba ostatnich lat użytych do współczynników kalibracji każdego podatku (średnia relacji wykonania do wyniku modułu przy obecnym prawie). Wybór metody, nie wartość z danych."),
-    ("STRUCTURAL_BREAKS", "Załamania strukturalne: seria -> pierwszy rok zapisany według nowych zasad. Lata od załamania nie służą do kalibracji ani oceny backtestu. rev_pit: od 2025 r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania samorządów), 2024: 97,6 -> 2025: 28,75 mld zł (sprawozdania MF)."),
+    ("STRUCTURAL_BREAKS", "Załamania strukturalne: seria -> pierwszy rok zapisany według nowych zasad. Lata od załamania nie służą do kalibracji ani oceny backtestu. rev_pit: od 2025 r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania samorządów), 2024: 97,6 -> 2025: 28,75 mld zł (sprawozdania MF). Prognoza PIT mnoży wynik modułu przez udział budżetu państwa s₀ (PIT_STATE_SHARE), skalibrowany na wykonaniu z jednego roku załamania; ten rok służy do kalibracji udziału, a nie do kalibracji modułu ani oceny backtestu."),
 )
 
 # series each module needs: macro bases (store names) + recorded revenue for calibration
@@ -96,8 +96,9 @@ STRUCTURAL_ASSUMPTIONS: tuple[tuple[str, str], ...] = (
 
 # Polish notes for the structural breaks declared in config.STRUCTURAL_BREAKS (also used by the backtest)
 BREAK_NOTES: dict[str, str] = {
-    "rev_pit": "PIT w budżecie państwa: zmiana zasad podziału od 2025 r. (reforma finansowania JST); kalibracja do 2024; "
-    "wykonanie 2025 nie jest porównywalne z prognozą przy dotychczasowych zasadach.",
+    "rev_pit": "PIT w budżecie państwa: zmiana zasad podziału od 2025 r. (reforma finansowania JST); prognoza uwzględnia "
+    "udział budżetu państwa po reformie, oszacowany z jednego roku (2025); wykonanie 2025 służy do kalibracji udziału, "
+    "nie do oceny backtestu.",
 }
 
 

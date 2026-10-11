@@ -507,7 +507,7 @@
     "rev_pit": 2025
    },
    "status": "model-structure",
-   "note": "Załamania strukturalne: seria -> pierwszy rok zapisany według nowych zasad. Lata od załamania nie służą do kalibracji ani oceny backtestu. rev_pit: od 2025 r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania samorządów), 2024: 97,6 -> 2025: 28,75 mld zł (sprawozdania MF).",
+   "note": "Załamania strukturalne: seria -> pierwszy rok zapisany według nowych zasad. Lata od załamania nie służą do kalibracji ani oceny backtestu. rev_pit: od 2025 r. budżet państwa zatrzymuje znacznie mniejszą część PIT (reforma finansowania samorządów), 2024: 97,6 -> 2025: 28,75 mld zł (sprawozdania MF). Prognoza PIT mnoży wynik modułu przez udział budżetu państwa s₀ (PIT_STATE_SHARE), skalibrowany na wykonaniu z jednego roku załamania; ten rok służy do kalibracji udziału, a nie do kalibracji modułu ani oceny backtestu.",
    "source": "",
    "year": null,
    "url": "",
@@ -579,7 +579,7 @@
    "key": "structure.break.rev_pit",
    "value": 2025,
    "status": "model-structure",
-   "note": "PIT w budżecie państwa: zmiana zasad podziału od 2025 r. (reforma finansowania JST); kalibracja do 2024; wykonanie 2025 nie jest porównywalne z prognozą przy dotychczasowych zasadach.",
+   "note": "PIT w budżecie państwa: zmiana zasad podziału od 2025 r. (reforma finansowania JST); prognoza uwzględnia udział budżetu państwa po reformie, oszacowany z jednego roku (2025); wykonanie 2025 służy do kalibracji udziału, nie do oceny backtestu.",
    "source": "",
    "year": null,
    "url": "",

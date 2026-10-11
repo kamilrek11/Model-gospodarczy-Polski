@@ -245,8 +245,9 @@ def test_simulate_endpoint_returns_full_response(client_with):
 # ---------------------------------------------------------------- real data: 2025 PIT structural break
 
 PIT_BREAK_NOTE = (
-    "PIT w budżecie państwa: zmiana zasad podziału od 2025 r. (reforma finansowania JST); kalibracja do 2024; "
-    "wykonanie 2025 nie jest porównywalne z prognozą przy dotychczasowych zasadach."
+    "PIT w budżecie państwa: zmiana zasad podziału od 2025 r. (reforma finansowania JST); prognoza uwzględnia "
+    "udział budżetu państwa po reformie, oszacowany z jednego roku (2025); wykonanie 2025 służy do kalibracji udziału, "
+    "nie do oceny backtestu."
 )
 
 

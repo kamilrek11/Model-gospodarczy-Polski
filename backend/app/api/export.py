@@ -2,6 +2,7 @@
 
 import csv
 import io
+import math
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -82,7 +83,18 @@ def _num(v: float) -> str:
     return f"{v:g}".replace(".", ",")
 
 
-def meta_rows(result: dict) -> list[list]:
+def _share_meta(value: Any, year: int | None, params: dict | None) -> list:
+    """Metadane row of the PIT state-budget share: s0 from the result's assumption row, multiplier from the request."""
+    ok = isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and 0 < value < 1e6
+    mult = (params or {}).get("pit_state_share_mult", 1.0)
+    if not ok or not isinstance(mult, (int, float)) or isinstance(mult, bool) or not math.isfinite(mult):
+        raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
+    pl = lambda x, d: f"{x:.{d}f}".replace(".", ",")  # noqa: E731
+    text = f"{pl(value, 3)}; mnożnik {pl(mult, 2)}; efektywny {pl(value * mult, 3)}; {'brak roku' if year is None else year}"
+    return ["pit_udzial_budzetu", text]
+
+
+def meta_rows(result: dict, params: dict | None = None) -> list[list]:
     """Provenance taken from the /simulate response the frontend sends back; missing fields are tolerated."""
     synthetic = result.get("synthetic")
     if synthetic is not None and not isinstance(synthetic, bool):
@@ -90,6 +102,7 @@ def meta_rows(result: dict) -> list[list]:
     assumptions = result.get("assumptions")
     names: list[str] = []
     constants: list[list] = []
+    share_row: list | None = None
     if assumptions is not None:
         if not isinstance(assumptions, list) or len(assumptions) > MAX_ASSUMPTIONS:
             raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
@@ -106,6 +119,8 @@ def meta_rows(result: dict) -> list[list]:
             is_num = lambda v: v is None or (isinstance(v, (int, float)) and not isinstance(v, bool))  # noqa: E731
             if not (is_num(low) and is_num(high)) or not isinstance(range_text, str) or len(range_text) > MAX_SOURCE_TEXT:
                 raise HTTPException(status_code=422, detail="Nieprawidłowe pole wyniku: assumptions")
+            if a["key"] == "PIT_STATE_SHARE":
+                share_row = _share_meta(a.get("value"), year, params)
             if status == "assumption":
                 names.append(a["key"])
             if status in STATUS_LABEL:
@@ -122,6 +137,8 @@ def meta_rows(result: dict) -> list[list]:
     rows.append(["wygenerowano", datetime.now(UTC).isoformat(timespec="seconds")])
     rows.append(["zalozenia_niezweryfikowane", "brak informacji" if assumptions is None else (", ".join(names) if names else "brak")])
     rows += constants
+    if share_row:
+        rows.append(share_row)
     if names:
         rows.append(["zastrzezenie", f"{ASSUMPTION_SENTENCE} Założenia: {', '.join(names)}."])
     elif assumptions is None:
@@ -129,11 +146,15 @@ def meta_rows(result: dict) -> list[list]:
     return rows
 
 
-def param_rows(req: ExportRequest) -> list[list]:
+def validated_params(req: ExportRequest) -> dict:
     try:
-        full = validate(req.params)
+        return validate(req.params)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+def param_rows(req: ExportRequest) -> list[list]:
+    full = validated_params(req)
     rows = [["scenariusz", req.name]] if req.name else []
     return rows + [[k, v] for k, v in full.items()]
 
@@ -187,7 +208,7 @@ def post_export(request: Request, req: ExportRequest, format: Literal["csv", "xl
         raise HTTPException(status_code=413, detail="Żądanie zbyt duże (maks. 1 MB).")
     rows = result_rows(req.result)
     params = param_rows(req)
-    meta = meta_rows(req.result)
+    meta = meta_rows(req.result, validated_params(req))
     stamp = datetime.now(UTC).strftime("%Y%m%d")
     if format == "csv":
         content, media = build_csv(meta, params, rows), "text/csv; charset=utf-8"

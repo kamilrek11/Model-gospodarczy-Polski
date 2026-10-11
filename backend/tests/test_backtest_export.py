@@ -254,3 +254,85 @@ def test_backtest_skips_pit_targets_from_break_year_and_notes_it():
     vat_without = dict(data)
     vat_without["rev_vat"] = data["rev_vat"].loc[:2024]
     assert backtest(vat_without, horizon=2).mape["vat"] != res.mape["vat"]
+
+
+def test_backtest_does_not_score_or_train_on_2025_pit(monkeypatch):
+    import app.model.backtest as bt
+    from app.data.dataset import assemble
+    from tests.real_dataset import real_results
+
+    data = {k: df.copy() for k, (_, df) in assemble(real_results()).items()}
+    for v in bt.MACRO_VARS:  # macro through 2026 so that origins >= 2025 exist
+        df = data[v]
+        data[v] = df.reindex(range(int(df.index.min()), 2027)).ffill()
+    seen = []
+    real_sim = bt.simulate
+
+    def spy(model, train, *a, **k):
+        res = real_sim(model, train, *a, **k)
+        seen.append((int(train["rev_pit"].index.max()), res.state_share.s0, max(train["wage_nominal"].index)))
+        return res
+
+    monkeypatch.setattr(bt, "simulate", spy)
+    res = bt.backtest(data, horizon=2)
+    assert "pit" in res.mape and seen
+    assert any(origin >= 2025 for _, _, origin in seen)  # the training window reaches the break year
+    assert all(mx < 2025 and s0 == 1.0 for mx, s0, _ in seen)
+
+
+def test_backtest_note_mentions_share():
+    from app.model.backtest import NOTE_PIT_BREAK
+
+    assert "udział budżetu państwa po reformie" in NOTE_PIT_BREAK
+    assert "oszacowany z jednego roku (2025)" in NOTE_PIT_BREAK
+    assert "nie do oceny backtestu" in NOTE_PIT_BREAK
+    from app.model.simulate import METHOD_CHOICES
+
+    assert any(k == "STRUCTURAL_BREAKS" and "udział" in t for k, t in METHOD_CHOICES)
+
+
+def _share_result(client, mult=0.8):
+    c, store = client
+    hist, model = fill(store)
+    res = sim_result(hist, model)
+    res["assumptions"] = [
+        *res.get("assumptions", []),
+        {"key": "PIT_STATE_SHARE", "value": 0.19812, "status": "calibrated", "year": 2025, "note": "x"},
+    ]
+    return c, res, {"pit_state_share_mult": mult}
+
+
+def test_export_contains_pit_share_metadata(client):
+    import csv as _csv
+    import io
+
+    from openpyxl import load_workbook
+
+    c, res, params = _share_result(client)
+    want = "0,198; mnożnik 0,80; efektywny 0,158; 2025"
+    r = c.post("/export?format=csv", json={"params": params, "result": res})
+    assert r.status_code == 200
+    meta = {row[0]: row[1] for row in _csv.reader(io.StringIO(r.content.decode("utf-8-sig"))) if len(row) == 2}
+    assert meta["pit_udzial_budzetu"] == want and want[0] not in "=+-@"
+    r = c.post("/export?format=xlsx", json={"params": params, "result": res})
+    ws = load_workbook(io.BytesIO(r.content))["Metadane"]
+    assert {row[0].value: row[1].value for row in ws.iter_rows()}["pit_udzial_budzetu"] == want
+
+
+def test_export_without_share_row_still_works(client):
+    c, store = client
+    hist, model = fill(store)
+    res = sim_result(hist, model)
+    res["assumptions"] = [a for a in res["assumptions"] if a["key"] != "PIT_STATE_SHARE"]
+    for fmt in ("csv", "xlsx"):
+        r = c.post(f"/export?format={fmt}", json={"params": {}, "result": res})
+        assert r.status_code == 200
+    assert "pit_udzial_budzetu" not in c.post("/export?format=csv", json={"params": {}, "result": res}).content.decode("utf-8-sig")
+
+
+@pytest.mark.parametrize("bad", ["x", True, None, [1], 0, -0.2])
+def test_export_share_row_value_validated(client, bad):
+    c, res, params = _share_result(client)
+    res["assumptions"][-1]["value"] = bad
+    r = c.post("/export?format=csv", json={"params": params, "result": res})
+    assert r.status_code == 422

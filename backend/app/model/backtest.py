@@ -84,7 +84,9 @@ def backtest(data: dict[str, pd.DataFrame], horizon: int = 3, min_train: int = M
     for pos, origin in enumerate(years[:-1]):
         if pos + 1 < min_train:
             continue
-        train = {k: df[df.index <= origin] for k, df in data.items()}
+        # series past a structural break are cut before it: neither the module calibration nor the PIT state
+        # share (s0 = 1 here) may learn from the new regime, so the backtest never sees the 2025 PIT split
+        train = {k: df[(df.index <= origin) & (df.index < config.STRUCTURAL_BREAKS.get(k, 10**9))] for k, df in data.items()}
         try:
             model = fit_macro(macro[macro.index <= origin], lags=1)
             res = simulate(model, train, params, horizon, BACKTEST_PATHS, BACKTEST_SEED)
